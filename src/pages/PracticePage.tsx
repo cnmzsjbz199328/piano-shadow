@@ -14,6 +14,7 @@ export function PracticePage() {
   const currentTime = useAppStore((s) => s.currentTime);
   const duration = useAppStore((s) => s.duration);
   const mode = useAppStore((s) => s.mode);
+  const transportState = useAppStore((s) => s.transportState);
   const learnerActiveMidi = useAppStore((s) => s.learnerActiveMidi);
   const liveFeedback = useAppStore((s) => s.liveFeedback);
   const lastResult = useAppStore((s) => s.lastResult);
@@ -28,12 +29,13 @@ export function PracticePage() {
     prevResult.current = lastResult;
   }, [lastResult, navigate]);
 
+  const isPlaying = transportState === 'playing' || transportState === 'counting-in';
   const activeReferenceMidi = useMemo(() => {
-    if (!song) return [];
+    if (!song || !isPlaying) return [];
     return song.notes
       .filter((n) => currentTime >= n.startTime && currentTime < n.startTime + n.duration)
       .map((n) => n.midi);
-  }, [song, currentTime]);
+  }, [song, currentTime, isPlaying]);
 
   if (!song) {
     return (

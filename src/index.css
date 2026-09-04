@@ -354,7 +354,11 @@ select {
 
 .practice-layout {
   display: grid;
-  grid-template-columns: 1fr 300px;
+  /* minmax(0, 1fr), not 1fr: a bare 1fr track's minimum is its content's
+     max-content size, so a wide canvas/SVG (piano roll, keyboard) would
+     otherwise expand this column past its share and push the side panel
+     off-screen. */
+  grid-template-columns: minmax(0, 1fr) 300px;
   gap: 1rem;
   align-items: start;
 }
