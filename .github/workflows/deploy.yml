@@ -16,6 +16,12 @@ jobs:
     permissions:
       contents: read
       deployments: write
+    # `secrets` isn't a recognized named-value inside `if:` (GitHub Actions
+    # rejects the whole workflow file if you reference it there) — mirror the
+    # secrets into env vars first, which `if:` CAN read.
+    env:
+      CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -25,9 +31,9 @@ jobs:
       - run: npm ci
       - run: npm run build
       - name: Deploy
-        if: ${{ vars.CLOUDFLARE_ACCOUNT_ID != '' || secrets.CLOUDFLARE_ACCOUNT_ID != '' }}
+        if: ${{ env.CF_API_TOKEN != '' && env.CF_ACCOUNT_ID != '' }}
         uses: cloudflare/wrangler-action@v3
         with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          apiToken: ${{ env.CF_API_TOKEN }}
+          accountId: ${{ env.CF_ACCOUNT_ID }}
           command: pages deploy dist --project-name=piano-shadow
