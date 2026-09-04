@@ -83,17 +83,18 @@ To run a single Playwright test: `npx playwright test -g "load demo, play along"
 ## Build
 
 ```bash
-npm run build    # typecheck + production build -> dist/ (+ a dist/404.html SPA fallback for GitHub Pages)
+npm run build    # typecheck + production build -> dist/
 npm run preview   # serve the production build locally
 ```
 
 ## Deployment
 
-The build is a static site. `VITE_BASE=/your-subpath/ npm run build` targets a
-sub-path host (e.g. a GitHub Pages project site); the default `/` suits
+The build is a static site, deployable to any static host. `VITE_BASE=/your-subpath/`
+targets a sub-path host (e.g. a GitHub Pages project site); the default `/` suits
 Cloudflare Pages or Vercel.
 
-**Cloudflare Pages** (`wrangler.toml` is already configured):
+**Cloudflare Pages** (live at **https://piano-shadow.pages.dev**; `wrangler.toml`
+is already configured; SPA routing via `public/_redirects`):
 
 ```bash
 npm run deploy    # npm run build && wrangler pages deploy dist --project-name piano-shadow
@@ -103,6 +104,13 @@ A GitHub Actions workflow (`.github/workflows/deploy.yml`) deploys the same way
 on every push to `main`, given repo secrets `CLOUDFLARE_API_TOKEN` and
 `CLOUDFLARE_ACCOUNT_ID`. `.github/workflows/ci.yml` runs typecheck/lint/unit
 tests/build and the E2E suite on every push and PR.
+
+**GitHub Pages** needs a 404.html SPA fallback instead of `_redirects` — use
+`npm run build:ghpages` (adds `dist/404.html`) rather than `npm run build`. The
+two are separate scripts because Cloudflare Pages treats a `404.html` in the
+output as an explicit custom-error page and stops honoring `_redirects`'
+`200` rewrite for it, so shipping both fallbacks in the same `dist/` breaks
+Cloudflare's routing.
 
 ## Browser compatibility
 
