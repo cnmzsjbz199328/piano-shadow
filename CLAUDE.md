@@ -4,15 +4,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Current state
 
-This is a **greenfield repository**. The only content today is the product spec at
-`doc/PIANO_SHADOW_GOAL.md`. There is no code, build system, package manager, or test
-runner yet, and the directory is not a git repository.
+v0.1 (the Web Practice MVP) is implemented — see [`CHANGELOG.md`](CHANGELOG.md) for what
+shipped and [`README.md`](README.md#known-limitations) for known limitations. Single Vite +
+React + TypeScript app with the module layout described below, enforced by
+`eslint.config.js`'s `no-restricted-imports` boundary rules.
 
-`doc/PIANO_SHADOW_GOAL.md` is the authoritative specification. **Read it in full before
-writing code** — it contains binding `MUST` / `MUST NOT` requirements, five acceptance
-scenarios (A–E) that define the correctness bar, and a phased implementation order
-(§34). This file summarizes the parts that are easy to get wrong; the spec wins on any
-conflict.
+`doc/PIANO_SHADOW_GOAL.md` is the authoritative specification for any further work.
+**Read it before making architectural changes** — it contains binding `MUST` / `MUST NOT`
+requirements, five acceptance scenarios (A–E) that define the correctness bar (covered by
+`src/practice-engine/evaluatePerformance.test.ts`), and a phased implementation order
+(§34; v0.1 completed Phases 1–5, §34's "Phase 6 — Optional" and v0.2 in §36 are not yet
+started). This file summarizes the parts that are easy to get wrong; the spec wins on any
+conflict. [`doc/ARCHITECTURE.md`](doc/ARCHITECTURE.md) has the as-built module map and the
+reasoning behind the sequence aligner, the timing/rhythm split, and the single-clock
+playback design.
 
 ## What is being built
 
@@ -86,20 +91,22 @@ local persistence (imported songs, settings, attempts, score summaries, last MID
 playback speed). Deviate only with a clear technical reason. No backend; deployable as a
 static site (GitHub Pages / Cloudflare Pages / Vercel).
 
-## Commands (target — not yet wired up)
-
-The spec (§23) requires the project to run with a small, documented command set. Once
-scaffolded, expect:
+## Commands
 
 ```bash
-npm install       # or: pnpm install
-npm run dev        # local dev server
-npm run test       # unit + integration tests (Vitest)
-npm run build       # production build — must pass with no TypeScript errors
+npm install
+npm run dev              # Vite dev server, http://localhost:5173
+npm run test               # unit + integration tests (Vitest)
+npm run typecheck           # tsc --noEmit
+npm run lint                 # ESLint, including the architectural boundary rules
+npm run build                 # typecheck + vite build -> dist/ (+ dist/404.html for GH Pages)
+npm run test:e2e:install       # one-time: install the Playwright Chromium browser
+npm run test:e2e                # Playwright E2E — builds + serves a production build first
+npm run deploy                   # build + wrangler pages deploy dist --project-name piano-shadow
 ```
 
-When you create the project, update this section with the real commands, including how to
-run a single test file and how to run the Playwright E2E suite.
+Single test file: `npx vitest run src/practice-engine/SequenceAligner.test.ts`.
+Single Playwright test: `npx playwright test -g "load demo, play along"`.
 
 ## Definition of done
 
