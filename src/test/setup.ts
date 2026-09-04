@@ -1,4 +1,9 @@
 import '@testing-library/jest-dom/vitest';
+import { afterEach } from 'vitest';
+import { cleanup } from '@testing-library/react';
+
+// Vitest doesn't auto-unmount React Testing Library trees between tests (Jest does).
+afterEach(() => cleanup());
 
 // jsdom does not implement these; several components/engines reference them.
 if (!('ResizeObserver' in globalThis)) {
