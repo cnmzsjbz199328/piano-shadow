@@ -60,6 +60,24 @@ test.describe('Piano Shadow — practice flow', () => {
     await expect(page.locator('.result-table tbody tr').first()).toBeVisible();
   });
 
+  test('an attempt auto-finishes when the reference reaches its natural end', async ({ page }) => {
+    // Regression: letting Play Along run to the end without clicking "Finish
+    // Attempt" must still land on Results, not leave the recorder running
+    // against a clock the engine has already reset to 0.
+    await page.goto('/');
+    await page.getByRole('button', { name: /C Major Five-Finger/i }).click();
+    await expect(page).toHaveURL(/\/practice$/);
+
+    await page.getByRole('tab', { name: 'Play Along' }).click();
+    await page.getByLabel('Count-in').uncheck();
+    await page.getByRole('button', { name: /start attempt/i }).click();
+    await page.getByRole('button', { name: /^.?\s*play$/i }).click();
+    await expect(page.getByText('Recording')).toBeVisible();
+
+    await expect(page).toHaveURL(/\/results$/, { timeout: 8000 });
+    await expect(page.getByRole('heading', { name: /^Score \d+$/ })).toBeVisible();
+  });
+
   test('virtual keyboard is clickable without any MIDI device connected', async ({ page }) => {
     await page.goto('/');
     await page.getByRole('button', { name: /Rhythm Study/i }).click();

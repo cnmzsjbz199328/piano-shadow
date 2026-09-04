@@ -22,3 +22,6 @@ blob-report/
 
 # Wrangler
 .wrangler/
+
+# Claude Code session-local state (not project content)
+.claude/

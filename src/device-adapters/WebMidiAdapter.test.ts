@@ -51,11 +51,13 @@ describe('WebMidiAdapter', () => {
 
   describe('with a fake Web MIDI API', () => {
     let input: FakeInput;
+    let access: MIDIAccessLike;
     let requestMIDIAccess: ReturnType<typeof vi.fn>;
 
     beforeEach(() => {
       input = new FakeInput('dev-1');
-      requestMIDIAccess = vi.fn().mockResolvedValue(makeFakeAccess([input]));
+      access = makeFakeAccess([input]);
+      requestMIDIAccess = vi.fn().mockResolvedValue(access);
       Object.defineProperty(globalThis, 'navigator', {
         value: { requestMIDIAccess },
         configurable: true,
@@ -99,6 +101,38 @@ describe('WebMidiAdapter', () => {
           { midi: 64, time: 0.9 },
         ]);
       });
+    });
+
+    it('detects a physical disconnect of the selected input via onstatechange', async () => {
+      const adapter = new WebMidiAdapter(() => 0);
+      const statuses: string[] = [];
+      await adapter.connect();
+      adapter.selectInput('dev-1');
+      adapter.onStatusChange((s) => statuses.push(s));
+
+      // The browser reuses the same MIDIPort object and flips `.state` rather
+      // than removing it from `access.inputs` when a device is unplugged.
+      input.state = 'disconnected';
+      access.onstatechange?.(new Event('statechange'));
+
+      expect(adapter.status).toBe('disconnected');
+      expect(statuses).toEqual(['disconnected']);
+      expect(adapter.selectedInputId).toBeNull();
+    });
+
+    it('a statechange unrelated to the selected input does not change status', async () => {
+      const other = new FakeInput('dev-2');
+      access = makeFakeAccess([input, other]);
+      requestMIDIAccess.mockResolvedValue(access);
+      const adapter = new WebMidiAdapter(() => 0);
+      await adapter.connect();
+      adapter.selectInput('dev-1');
+
+      other.state = 'disconnected';
+      access.onstatechange?.(new Event('statechange'));
+
+      expect(adapter.status).toBe('connected');
+      expect(adapter.selectedInputId).toBe('dev-1');
     });
 
     it('surfaces a WebMidiError instead of throwing an unhandled rejection on denial', async () => {

@@ -4,6 +4,8 @@ export {
   DEFAULT_ALIGNER_WEIGHTS,
   DEFAULT_SCORE_ANCHORS,
   DEFAULT_OVERALL_WEIGHTS,
+  LIVE_MATCH_WINDOW_MS,
+  LIVE_MATCH_WRONG_NOTE_SEMITONES,
   classifyTimingError,
   resolveConfig,
   type TimingBand,

@@ -20,7 +20,11 @@ export interface PlaybackEngineOptions {
   onStateChange?: (state: PlaybackState) => void;
   onReferenceNoteStart?: (note: NoteEvent) => void;
   onReferenceNoteEnd?: (note: NoteEvent) => void;
-  onEnded?: () => void;
+  /** Fires when the song reaches its natural end. `finalTime` is the reference-timeline
+   *  time at the moment playback stopped (usually ~= duration) — read it instead of
+   *  `getCurrentTime()` from inside the callback, since the engine has already reset
+   *  its clock to 0 by the time this fires. */
+  onEnded?: (finalTime: number) => void;
 }
 
 export const MIN_TEMPO_SCALE = 0.25;
@@ -44,6 +48,7 @@ export class PlaybackEngine {
   private scheduledNoteIds: number[] = [];
   private scheduledClickIds: number[] = [];
   private endEventId: number | null = null;
+  private endTimeoutId: ReturnType<typeof setTimeout> | null = null;
   private rafId: number | null = null;
   private disposed = false;
 
@@ -216,10 +221,15 @@ export class PlaybackEngine {
     const t = transportFromRef(this.origin, note.startTime);
     if (t < 0) return;
     const id = Tone.getTransport().scheduleOnce((time) => {
+      // note.duration is reference-timeline seconds; real (transport/audio) time
+      // moves at 1/scale of that, so both the audible sustain and the note-end
+      // callback must be scaled — otherwise a tempo scale != 1 cuts notes short
+      // (scale < 1, slower) or lets them ring too long (scale > 1, faster).
+      const realDuration = note.duration / this.scale;
       const velocity = clamp((note.velocity ?? 100) / 127, 0.05, 1);
-      this.synth?.triggerAttackRelease(note.noteName, Math.max(0.05, note.duration), time, velocity);
+      this.synth?.triggerAttackRelease(note.noteName, Math.max(0.05, realDuration), time, velocity);
       Tone.getDraw().schedule(() => this.options.onReferenceNoteStart?.(note), time);
-      Tone.getDraw().schedule(() => this.options.onReferenceNoteEnd?.(note), time + note.duration);
+      Tone.getDraw().schedule(() => this.options.onReferenceNoteEnd?.(note), time + realDuration);
     }, t);
     this.scheduledNoteIds.push(id);
   }
@@ -255,9 +265,16 @@ export class PlaybackEngine {
       // "the song just ended," and avoids Tone.Draw's separate
       // anticipation/expiration window, which is meant for audio-visual
       // sync, not for a control-flow action like this one.
-      setTimeout(() => {
+      //
+      // The timeout id is tracked (and cleared by cancelAllScheduled) so a
+      // restart/seek/dispose landing in the brief window before this fires
+      // can't have it go off against a session that already moved on.
+      this.endTimeoutId = setTimeout(() => {
+        this.endTimeoutId = null;
+        if (this.disposed) return;
+        const finalTime = this.getCurrentTime(); // read before stop() resets the clock
         this.stop();
-        this.options.onEnded?.();
+        this.options.onEnded?.(finalTime);
       }, 0);
     }, t);
   }
@@ -266,9 +283,11 @@ export class PlaybackEngine {
     for (const id of this.scheduledNoteIds) Tone.getTransport().clear(id);
     for (const id of this.scheduledClickIds) Tone.getTransport().clear(id);
     if (this.endEventId !== null) Tone.getTransport().clear(this.endEventId);
+    if (this.endTimeoutId !== null) clearTimeout(this.endTimeoutId);
     this.scheduledNoteIds = [];
     this.scheduledClickIds = [];
     this.endEventId = null;
+    this.endTimeoutId = null;
   }
 
   private startTicking(): void {

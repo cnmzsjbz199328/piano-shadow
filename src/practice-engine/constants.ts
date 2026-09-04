@@ -24,6 +24,16 @@ export const DEFAULT_TIMING_TOLERANCES: TimingTolerances = {
 /** Classification keys for a matched note's timing (not display text). */
 export type TimingBand = 'perfect' | 'good' | 'warn' | 'severe';
 
+/**
+ * Tuning for `LiveMatcher`'s real-time preview during Play Along (spec §9.2).
+ * Deliberately separate from `DEFAULT_TIMING_TOLERANCES`: the live matcher is a
+ * greedy, non-authoritative estimate, so its window is wider than the "warn"
+ * scoring tolerance above — the authoritative alignment (`evaluatePerformance`)
+ * always re-scores the full attempt with the real tolerances once it finishes.
+ */
+export const LIVE_MATCH_WINDOW_MS = 400;
+export const LIVE_MATCH_WRONG_NOTE_SEMITONES = 3;
+
 export function classifyTimingError(absErrorMs: number, tol: TimingTolerances = DEFAULT_TIMING_TOLERANCES): TimingBand {
   if (absErrorMs <= tol.perfectMs) return 'perfect';
   if (absErrorMs <= tol.goodMs) return 'good';

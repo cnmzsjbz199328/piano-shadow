@@ -1,4 +1,5 @@
 import type { NoteEvent } from '@/music-model';
+import { LIVE_MATCH_WINDOW_MS, LIVE_MATCH_WRONG_NOTE_SEMITONES } from './constants';
 
 /**
  * Lightweight real-time feedback for Play Along mode (spec §9.2). This is a
@@ -32,8 +33,8 @@ export class LiveMatcher {
 
   constructor(referenceNotes: readonly NoteEvent[], options: LiveMatcherOptions = {}) {
     this.reference = [...referenceNotes].sort((a, b) => a.startTime - b.startTime);
-    this.windowMs = options.windowMs ?? 400;
-    this.wrongNoteSemis = options.wrongNoteSemitones ?? 3;
+    this.windowMs = options.windowMs ?? LIVE_MATCH_WINDOW_MS;
+    this.wrongNoteSemis = options.wrongNoteSemitones ?? LIVE_MATCH_WRONG_NOTE_SEMITONES;
   }
 
   /** Feed one learner note-on (with `startTime` already on the reference clock). */

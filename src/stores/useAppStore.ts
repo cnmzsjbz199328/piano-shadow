@@ -94,7 +94,7 @@ interface AppState {
   releaseVirtualKey(midi: number): void;
 
   startAttempt(): void;
-  finishAttempt(): Promise<void>;
+  finishAttempt(atTime?: number): Promise<void>;
 }
 
 // --- module-scoped engines (one AudioContext / input pipeline for the app's lifetime) ---
@@ -103,6 +103,13 @@ const engine = new PlaybackEngine({
   onTick: (t) => useAppStore.setState({ currentTime: t, debug: { ...useAppStore.getState().debug, playheadTime: t } }),
   onStateChange: (s) => useAppStore.setState({ transportState: s }),
   onReferenceNoteStart: (note) => handleReferenceNoteStart(note),
+  onEnded: (finalTime) => {
+    // The reference reached its natural end. If an attempt (Play Along / Wait)
+    // is still recording, finish it now — otherwise the recorder and live
+    // matcher are left running against a clock the engine has already reset
+    // to 0, and any further input would be timestamped near zero.
+    if (useAppStore.getState().isAttemptRunning) void useAppStore.getState().finishAttempt(finalTime);
+  },
 });
 
 const keyboardAdapter = new VirtualKeyboardAdapter(() => engine.getCurrentTime());
@@ -150,7 +157,11 @@ function handleReferenceNoteStart(note: NoteEvent): void {
   const state = useAppStore.getState();
   if (state.mode === 'wait' && state.isAttemptRunning) {
     engine.pause();
-    useAppStore.setState({ waitingForMidi: [note.midi] });
+    // A chord fires this callback once per simultaneous note, so merge into
+    // the existing wait set rather than replacing it — otherwise only the
+    // last-processed note of the chord ends up required, and playing just
+    // that one silently resumes playback without the rest of the chord.
+    useAppStore.setState((s) => ({ waitingForMidi: [...new Set([...(s.waitingForMidi ?? []), note.midi])] }));
   }
 }
 
@@ -352,10 +363,10 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ isAttemptRunning: true, liveFeedback: [], lastResult: null, waitingForMidi: null });
   },
 
-  async finishAttempt() {
+  async finishAttempt(atTime) {
     const { song, mode } = get();
     if (!song || !recorder) return;
-    const learnerPerformance = recorder.stop(engine.getCurrentTime(), `${song.name} attempt`);
+    const learnerPerformance = recorder.stop(atTime ?? engine.getCurrentTime(), `${song.name} attempt`);
     recorder.dispose();
     recorder = null;
     liveMatcher = null;

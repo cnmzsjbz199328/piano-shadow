@@ -58,7 +58,7 @@ export class WebMidiAdapter implements NoteInputAdapter {
       this.setStatus('error');
       throw new WebMidiError('MIDI access was denied or is unavailable.', { cause: err });
     }
-    this.access.onstatechange = () => this.statusEmitter.emit(this.status);
+    this.access.onstatechange = () => this.handlePortStateChange();
     this.setStatus('disconnected'); // access granted; caller still needs to selectInput()
   }
 
@@ -126,6 +126,23 @@ export class WebMidiAdapter implements NoteInputAdapter {
       // both MUST be honoured (spec §25: never silently ignore a note-off).
       this.endEmitter.emit({ midi, time });
     }
+  }
+
+  /**
+   * The browser reuses the same MIDIPort object across connect/disconnect —
+   * it flips `.state` rather than removing it from `access.inputs` — so a
+   * naive `onstatechange` handler that just re-emits the cached status would
+   * keep reporting 'connected' forever after the device is unplugged
+   * (spec §25: never silently swallow a device error).
+   */
+  private handlePortStateChange(): void {
+    if (this.currentInput && this.currentInput.state === 'disconnected') {
+      this.currentInput.onmidimessage = null;
+      this.currentInput = null;
+      this.setStatus('disconnected');
+      return;
+    }
+    this.statusEmitter.emit(this.status);
   }
 
   private setStatus(status: AdapterStatus): void {
