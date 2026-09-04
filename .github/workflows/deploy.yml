@@ -1,0 +1,33 @@
+name: Deploy to Cloudflare Pages
+
+# Requires repo secrets CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID
+# (Account Home -> API Tokens, and the Account ID shown on the Workers & Pages
+# overview page). Without them this workflow is a no-op skip, not a failure.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Build and deploy
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      deployments: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Deploy
+        if: ${{ vars.CLOUDFLARE_ACCOUNT_ID != '' || secrets.CLOUDFLARE_ACCOUNT_ID != '' }}
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy dist --project-name=piano-shadow

@@ -142,6 +142,10 @@ export class PlaybackEngine {
     Tone.getTransport().seconds = 0;
     this.origin = pin(0, 0, this.scale);
     this.setState(this.currentPerformance ? 'stopped' : 'idle');
+    // stopTicking() just cancelled the rAF loop, so the store would otherwise
+    // be left showing whatever the last tick reported (close to, but not
+    // quite, the end) instead of the reset playhead — push the true value once.
+    this.options.onTick?.(this.getCurrentTime());
   }
 
   restart(): void {
@@ -245,10 +249,16 @@ export class PlaybackEngine {
     if (!this.currentPerformance) return;
     const t = transportFromRef(this.origin, this.currentPerformance.duration);
     this.endEventId = Tone.getTransport().scheduleOnce(() => {
-      Tone.getDraw().schedule(() => {
+      // Defer off the Transport's own scheduling tick — calling `.stop()`
+      // re-entrantly from inside one of the Transport's own scheduled
+      // callbacks is unreliable. A macrotask is more than precise enough for
+      // "the song just ended," and avoids Tone.Draw's separate
+      // anticipation/expiration window, which is meant for audio-visual
+      // sync, not for a control-flow action like this one.
+      setTimeout(() => {
         this.stop();
         this.options.onEnded?.();
-      }, Tone.now());
+      }, 0);
     }, t);
   }
 

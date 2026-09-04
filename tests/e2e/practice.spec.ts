@@ -96,5 +96,10 @@ test.describe('Piano Shadow — practice flow', () => {
 
     const timeLabel = page.locator('.transport__time');
     await expect(timeLabel).not.toHaveText('0:00 / 0:02');
+
+    // Regression: playback must stop itself at the end of the song and reset
+    // the playhead, not run past the reference's duration indefinitely.
+    await expect(page.getByRole('button', { name: /^.?\s*play$/i })).toBeVisible({ timeout: 5000 });
+    await expect(timeLabel).toHaveText('0:00 / 0:02');
   });
 });
