@@ -9,6 +9,10 @@ feedback on pitch, timing, rhythm, duration, missed notes, and extra notes.
 
 ![Piano Shadow — Practice page with the Piano Roll and transport controls](doc/screenshots/practice.jpg)
 
+![Piano Shadow demo — picking a song, playing along, and seeing the score breakdown](doc/screenshots/demo.gif)
+
+**Live app:** https://piano-shadow.pages.dev
+
 This is **v0.1, the Web Practice MVP** described in
 [`doc/PIANO_SHADOW_GOAL.md`](doc/PIANO_SHADOW_GOAL.md). See
 [`doc/ARCHITECTURE.md`](doc/ARCHITECTURE.md) for how it's built and
