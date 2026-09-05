@@ -1,6 +1,6 @@
 {
   "name": "piano-shadow",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Browser-first piano practice app: turn a reference performance into a reusable practice template and explain exactly how the learner differs from it.",
   "type": "module",
   "license": "MIT",
@@ -22,8 +22,10 @@
     "deploy": "npm run build && wrangler pages deploy dist --project-name piano-shadow"
   },
   "dependencies": {
+    "@spotify/basic-pitch": "^1.0.1",
     "@tonejs/midi": "^2.0.28",
     "idb": "^8.0.0",
+    "pitchy": "^4.1.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.26.2",

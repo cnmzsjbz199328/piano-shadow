@@ -720,3 +720,65 @@ select {
   border-radius: var(--radius-sm);
   font-size: 0.88rem;
 }
+
+/* --- microphone lab --- */
+
+.level-meter {
+  width: 100%;
+  height: 0.5rem;
+  background: var(--bg-elevated-2);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  margin: 0.5rem 0 1rem;
+}
+
+.level-meter__fill {
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.05s linear;
+}
+
+.confidence-bar {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  width: 6rem;
+  height: 1rem;
+  background: var(--bg-elevated-2);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+
+.confidence-bar__fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  height: 100%;
+  background: var(--correct);
+}
+
+.confidence-bar__label {
+  position: relative;
+  margin: 0 auto;
+  font-size: var(--text-xs);
+  color: var(--text);
+  mix-blend-mode: difference;
+}
+
+.lab-recognizer-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.lab-recognizer {
+  background: var(--bg-elevated-2);
+  border-radius: var(--radius-sm);
+  padding: 0.75rem;
+}
+
+.lab-latency {
+  font-size: var(--text-sm);
+  color: var(--text-dim);
+  margin: 0.4rem 0;
+}

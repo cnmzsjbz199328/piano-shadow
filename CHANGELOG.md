@@ -1,5 +1,51 @@
 # Changelog
 
+## v0.2.0 — UI Modernization + Microphone Lab (2026-09-05)
+
+Implementation of [`doc/NEXT_ROUND_REQUIREMENTS.md`](doc/NEXT_ROUND_REQUIREMENTS.md),
+run sequentially as specified: Phase A shipped and passed its own acceptance criteria
+before Phase B started.
+
+### Phase A — UI modernization
+
+- **Restrained-neutral (Linear-dark) visual refresh** — a full design-token rework in
+  `src/index.css`: a neutral gray surface/border/text scale (3 emphasis levels), a single
+  indigo-blue accent, spacing/type/radius scales, and a border-first elevation system.
+  Every existing page/component retinted onto the new tokens; the four semantic result
+  colors (`--correct`/`--wrong`/`--missed`/`--extra`) keep their names and stay mutually
+  distinguishable. No new dependency, no route/IA change, no change to `PianoRoll`'s
+  canvas algorithm/`practice-engine`/`playback-engine` — chrome and tokens only.
+  `PianoRoll.tsx`'s canvas now reads the live token values via `getComputedStyle` instead
+  of duplicating them as hex literals, so it can't drift out of sync with the palette.
+  Contrast verified (WCAG relative luminance): body text 17.0:1, all four semantic colors
+  6.3–8.9:1 against the new background.
+
+### Phase B — Microphone Lab (spec §15/§36 groundwork)
+
+- **An isolated, experimental `/microphone-lab` page** — not wired into Practice or the
+  `NoteInputAdapter` list (spec §25's ban on claiming microphone transcription works
+  before it's benchmarked). Permission flow, live level meter via `AudioWorklet` capture
+  (not the deprecated `ScriptProcessorNode`), and never-silently-swallowed
+  permission/device-loss errors, matching the app's existing Web MIDI error handling.
+- **Two `NoteRecognizer` implementations**: `PitchyRecognizer` (baseline, MIT-licensed
+  `pitchy`, autocorrelation/MPM, monophonic) and `BasicPitchRecognizer` (Spotify's
+  Apache-2.0 Basic Pitch, polyphonic-capable, dynamically imported so its TensorFlow.js
+  dependency and model weights never touch the main bundle — confirmed by the production
+  build's separate chunk).
+- **Latency measurement, confidence visualization, and a synthetic-audio benchmark**
+  (`src/recognition/benchmark.ts`) that produced this round's written findings
+  deterministically, without needing a live microphone session.
+- **MIDI ground-truth comparison** — reuses `practice-engine`'s existing
+  `evaluatePerformance`/`SequenceAligner` to diff mic-detected notes against a real
+  MIDI-recorded performance, rather than a second bespoke comparison algorithm.
+- **Written findings**: [`doc/MICROPHONE_LAB_FINDINGS.md`](doc/MICROPHONE_LAB_FINDINGS.md)
+  — both recognizers hit 100% accuracy on a 9-tone synthetic benchmark (a ceiling case,
+  not a real-world number); Basic Pitch is ~80x slower per call (≈1.9s vs ≈23ms). A live
+  microphone/real-piano session has not been run yet — that gap, and the explicit
+  "do not merge into the stable practice path yet" conclusion, are documented there.
+  Transkun was investigated and dropped from this round (MIT-licensed upstream, but no
+  official JS package — only an unofficial ONNX export needing a hand-rolled decoder).
+
 ## v0.1.0 — Web Practice MVP (2026-09-04)
 
 Initial implementation of [`doc/PIANO_SHADOW_GOAL.md`](doc/PIANO_SHADOW_GOAL.md).
