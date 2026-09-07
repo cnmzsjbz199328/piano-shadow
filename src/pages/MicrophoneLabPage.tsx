@@ -358,7 +358,7 @@ export function MicrophoneLabPage() {
   }
 
   return (
-    <div>
+    <div className="page">
       <header className="page-header">
         <div className="page-header__eyebrow">Experimental — not part of Practice</div>
         <h1>Microphone Lab</h1>

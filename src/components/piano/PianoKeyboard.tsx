@@ -1,10 +1,23 @@
-import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
-import { isBlackKey } from '@/music-model';
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
+} from 'react';
+import { isBlackKey, midiToNoteName } from '@/music-model';
 
 /**
  * The virtual piano keyboard (spec §2.2.A) — mouse/touch and computer-keyboard
  * input, with visible pressed-key state. This is what makes the app fully
  * testable with no hardware attached.
+ *
+ * Phase C (ROUND_3_REQUIREMENTS §C.2.4): the default range is the full 88-key
+ * piano (A0–C8). It is ~1352px wide at the current white-key width, so it
+ * scrolls horizontally inside its own container; `focusMidi` scrolls the
+ * relevant octave into view (initially middle C). The QWERTY input mapping is
+ * unchanged and out of scope here.
  */
 
 interface PianoKeyboardProps {
@@ -14,6 +27,8 @@ interface PianoKeyboardProps {
   heldMidi: readonly number[];
   /** Reference notes currently sounding, e.g. during Listen/Play Along playback. */
   activeReferenceMidi?: readonly number[];
+  /** Scroll this pitch's octave into view (reference/learner note, or middle C). */
+  focusMidi?: number;
   onPress: (midi: number, velocity?: number) => void;
   onRelease: (midi: number) => void;
   disabled?: boolean;
@@ -38,13 +53,21 @@ function buildKeyLayout(low: number, high: number): KeyLayout {
       i++;
     }
   }
+  const whiteByMidi = new Map(whites.map((w) => [w.midi, w]));
   const blacks: KeyLayout['blacks'] = [];
   for (let m = low; m <= high; m++) {
     if (!isBlackKey(m)) continue;
-    const prevWhite = whites.find((w) => w.midi === m - 1);
+    const prevWhite = whiteByMidi.get(m - 1);
     if (prevWhite) blacks.push({ midi: m, x: prevWhite.x + WHITE_WIDTH - BLACK_WIDTH / 2 });
   }
   return { whites, blacks, totalWidth: whites.length * WHITE_WIDTH };
+}
+
+/** White-key x-centre for a pitch (falls back to the nearest lower white key). */
+function centreXForMidi(layout: KeyLayout, midi: number): number | null {
+  const target = isBlackKey(midi) ? midi - 1 : midi;
+  const white = layout.whites.find((w) => w.midi === target) ?? layout.whites.find((w) => w.midi >= target);
+  return white ? white.x + WHITE_WIDTH / 2 : null;
 }
 
 // QWERTY row -> semitone offset from the current base octave (z/x shift octaves).
@@ -59,10 +82,11 @@ function isTypingTarget(el: EventTarget | null): boolean {
 }
 
 export function PianoKeyboard({
-  lowMidi = 48,
-  highMidi = 84,
+  lowMidi = 21,
+  highMidi = 108,
   heldMidi,
   activeReferenceMidi = [],
+  focusMidi,
   onPress,
   onRelease,
   disabled = false,
@@ -71,7 +95,9 @@ export function PianoKeyboard({
   const held = useMemo(() => new Set(heldMidi), [heldMidi]);
   const active = useMemo(() => new Set(activeReferenceMidi), [activeReferenceMidi]);
   const [octaveShift, setOctaveShift] = useState(0);
+  const [overflowing, setOverflowing] = useState(false);
   const keyToMidi = useRef(new Map<string, number>());
+  const scrollRef = useRef<HTMLDivElement>(null);
   const onPressRef = useRef(onPress);
   const onReleaseRef = useRef(onRelease);
   onPressRef.current = onPress;
@@ -111,54 +137,106 @@ export function PianoKeyboard({
     };
   }, [octaveShift, disabled]);
 
+  // Scroll the focused octave into view (initial: middle C). No-op when the
+  // whole keyboard already fits, or in a zero-width test container.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el || focusMidi === undefined) return;
+    const centre = centreXForMidi(layout, focusMidi);
+    if (centre === null || el.clientWidth === 0 || layout.totalWidth <= el.clientWidth) return;
+    const target = Math.max(0, Math.min(centre - el.clientWidth / 2, layout.totalWidth - el.clientWidth));
+    el.scrollTo({ left: target, behavior: 'smooth' });
+  }, [focusMidi, layout]);
+
+  // Show the scroll arrows only when the keyboard is wider than its container.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const measure = () => setOverflowing(el.scrollWidth > el.clientWidth + 1);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [layout]);
+
+  function scrollByKeys(direction: -1 | 1) {
+    scrollRef.current?.scrollBy({ left: direction * WHITE_WIDTH * 7, behavior: 'smooth' });
+  }
+
   function press(midi: number, e: ReactPointerEvent) {
     if (disabled) return;
     const velocity = e.pressure > 0 ? Math.round(e.pressure * 127) : 100;
     onPress(midi, velocity);
   }
 
+  const keyHandlers = (midi: number) => ({
+    onPointerDown: (e: ReactPointerEvent) => press(midi, e),
+    onPointerUp: () => onRelease(midi),
+    onPointerLeave: () => held.has(midi) && onRelease(midi),
+    onKeyDown: (e: ReactKeyboardEvent) => {
+      if (e.key === 'Enter' || e.key === ' ') onPress(midi, 100);
+    },
+    onKeyUp: (e: ReactKeyboardEvent) => {
+      if (e.key === 'Enter' || e.key === ' ') onRelease(midi);
+    },
+  });
+
+  function keyClass(base: string, midi: number): string {
+    if (held.has(midi)) return `${base} piano-key--held`;
+    if (active.has(midi)) return `${base} piano-key--reference-active`;
+    return base;
+  }
+
   return (
-    <div className="piano-keyboard">
-      <svg
-        width={layout.totalWidth}
-        height={WHITE_HEIGHT}
-        viewBox={`0 0 ${layout.totalWidth} ${WHITE_HEIGHT}`}
-        role="group"
-        aria-label="Virtual piano keyboard"
-      >
-        {layout.whites.map(({ midi, x }) => (
-          <rect
-            key={midi}
-            className={
-              'piano-key piano-key--white' +
-              (held.has(midi) ? ' piano-key--held' : active.has(midi) ? ' piano-key--reference-active' : '')
-            }
-            x={x}
-            y={0}
-            width={WHITE_WIDTH}
-            height={WHITE_HEIGHT}
-            role="button"
-            aria-label={`Key ${midi}`}
-            aria-pressed={held.has(midi)}
-            tabIndex={disabled ? -1 : 0}
-            onPointerDown={(e) => press(midi, e)}
-            onPointerUp={() => onRelease(midi)}
-            onPointerLeave={() => held.has(midi) && onRelease(midi)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') onPress(midi, 100);
-            }}
-            onKeyUp={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') onRelease(midi);
-            }}
-          />
-        ))}
+    <div className="piano-keyboard-wrap">
+      {overflowing && (
+        <button
+          type="button"
+          className="piano-keyboard__scroll piano-keyboard__scroll--prev"
+          aria-label="Scroll keyboard left"
+          tabIndex={-1}
+          onClick={() => scrollByKeys(-1)}
+        >
+          ‹
+        </button>
+      )}
+      <div className="piano-keyboard" ref={scrollRef}>
+        <svg
+          width={layout.totalWidth}
+          height={WHITE_HEIGHT}
+          viewBox={`0 0 ${layout.totalWidth} ${WHITE_HEIGHT}`}
+          role="group"
+          aria-label="Virtual piano keyboard"
+        >
+        {layout.whites.map(({ midi, x }) => {
+          const name = midiToNoteName(midi);
+          const showLabel = midi % 12 === 0 || midi === lowMidi || midi === highMidi;
+          return (
+            <g key={midi}>
+              <rect
+                className={keyClass('piano-key piano-key--white', midi)}
+                x={x}
+                y={0}
+                width={WHITE_WIDTH}
+                height={WHITE_HEIGHT}
+                role="button"
+                aria-label={`Key ${midi}`}
+                aria-pressed={held.has(midi)}
+                tabIndex={disabled ? -1 : 0}
+                {...keyHandlers(midi)}
+              />
+              {showLabel && (
+                <text className="piano-key__label" x={x + WHITE_WIDTH / 2} y={WHITE_HEIGHT - 8} textAnchor="middle">
+                  {name}
+                </text>
+              )}
+            </g>
+          );
+        })}
         {layout.blacks.map(({ midi, x }) => (
           <rect
             key={midi}
-            className={
-              'piano-key piano-key--black' +
-              (held.has(midi) ? ' piano-key--held' : active.has(midi) ? ' piano-key--reference-active' : '')
-            }
+            className={keyClass('piano-key piano-key--black', midi)}
             x={x}
             y={0}
             width={BLACK_WIDTH}
@@ -167,18 +245,22 @@ export function PianoKeyboard({
             aria-label={`Key ${midi}`}
             aria-pressed={held.has(midi)}
             tabIndex={disabled ? -1 : 0}
-            onPointerDown={(e) => press(midi, e)}
-            onPointerUp={() => onRelease(midi)}
-            onPointerLeave={() => held.has(midi) && onRelease(midi)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') onPress(midi, 100);
-            }}
-            onKeyUp={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') onRelease(midi);
-            }}
+            {...keyHandlers(midi)}
           />
         ))}
-      </svg>
+        </svg>
+      </div>
+      {overflowing && (
+        <button
+          type="button"
+          className="piano-keyboard__scroll piano-keyboard__scroll--next"
+          aria-label="Scroll keyboard right"
+          tabIndex={-1}
+          onClick={() => scrollByKeys(1)}
+        >
+          ›
+        </button>
+      )}
     </div>
   );
 }

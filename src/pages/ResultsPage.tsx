@@ -15,37 +15,44 @@ export function ResultsPage() {
 
   if (!song || !result || !learnerPerformance) {
     return (
-      <EmptyState
-        title="No results yet"
-        description="Finish a Play Along or Wait Mode attempt to see your score breakdown."
-        action={
-          <Link to="/practice" className="btn btn--primary">
-            Go to practice
-          </Link>
-        }
-      />
+      <div className="page">
+        <EmptyState
+          title="No results yet"
+          description="Finish a Play Along or Wait Mode attempt to see your score breakdown."
+          action={
+            <Link to="/practice" className="btn btn--primary">
+              Go to practice
+            </Link>
+          }
+        />
+      </div>
     );
   }
 
   return (
-    <div>
-      <header className="page-header">
-        <div className="page-header__eyebrow">Results — {song.name}</div>
-        <h1>Score {result.scores.overall}</h1>
-      </header>
+    <div className="results-page">
+      <div className="results-head">
+        <span className="results-head__icon" aria-hidden>
+          <NoteIcon />
+        </span>
+        <div>
+          <h1 className="results-head__title">{song.name}</h1>
+          <h2 className="results-head__score">
+            Score <b>{result.scores.overall}</b>
+          </h2>
+        </div>
+      </div>
 
       <ScoreCard scores={result.scores} counts={result.counts} />
 
-      <div className="panel">
-        <h2>Reference vs. your performance</h2>
-        <PianoRoll
-          reference={song.notes}
-          learner={learnerPerformance.notes}
-          matches={result.matches}
-          currentTime={-1}
-          duration={Math.max(song.duration, learnerPerformance.duration)}
-        />
-      </div>
+      <h2>Reference vs. your performance</h2>
+      <PianoRoll
+        reference={song.notes}
+        learner={learnerPerformance.notes}
+        matches={result.matches}
+        currentTime={-1}
+        duration={Math.max(song.duration, learnerPerformance.duration)}
+      />
 
       <NoteResultList matches={result.matches} />
 
@@ -73,14 +80,24 @@ export function ResultsPage() {
         </div>
       )}
 
-      <div className="btn-row" style={{ marginTop: '1rem' }}>
+      <div className="results-actions">
+        <Link to="/practice" className="btn">
+          Back home
+        </Link>
         <button type="button" className="btn btn--primary" onClick={() => navigate('/practice')}>
           Practice again{mode !== 'listen' ? ` (${mode})` : ''}
         </button>
-        <Link to="/" className="btn">
-          Back home
-        </Link>
       </div>
     </div>
+  );
+}
+
+function NoteIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden>
+      <circle cx="7" cy="18" r="2.5" />
+      <circle cx="18" cy="16" r="2.5" />
+      <path d="M9.5 18V6l11-2v12" />
+    </svg>
   );
 }

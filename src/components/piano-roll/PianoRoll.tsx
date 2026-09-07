@@ -223,7 +223,7 @@ export function PianoRoll({ reference, learner, matches, currentTime, duration, 
     <div className="piano-roll">
       <div className="piano-roll__toolbar">
         {matches && (
-          <div className="btn-row" style={{ marginRight: 'auto', fontSize: '0.78rem', color: 'var(--text-dim)' }}>
+          <div className="piano-roll__legend">
             <span><span className="result-dot result-dot--correct" />Correct</span>
             <span><span className="result-dot result-dot--wrong-note" />Wrong note</span>
             <span><span className="result-dot result-dot--missed" />Missed</span>
@@ -247,8 +247,8 @@ export function PianoRoll({ reference, learner, matches, currentTime, duration, 
           +
         </button>
       </div>
-      <div style={{ display: 'flex' }}>
-        <svg width={GUTTER_WIDTH} height={rollHeight} style={{ flexShrink: 0 }} aria-hidden>
+      <div className="piano-roll__stage">
+        <svg className="piano-roll__gutter" width={GUTTER_WIDTH} height={rollHeight} aria-hidden>
           {Array.from({ length: maxMidi - minMidi + 1 }, (_, i) => minMidi + i).map((m) => {
             const y = yForMidi(m, maxMidi);
             const black = isBlackKey(m);
@@ -263,7 +263,7 @@ export function PianoRoll({ reference, learner, matches, currentTime, duration, 
                   strokeWidth={0.5}
                 />
                 {m % 12 === 0 && (
-                  <text x={3} y={y + ROW_HEIGHT - 1} fontSize={7} fill="#333">
+                  <text x={3} y={y + ROW_HEIGHT - 1} fontSize={7} fill="var(--bg)">
                     {midiToNoteName(m)}
                   </text>
                 )}

@@ -7,16 +7,19 @@ feedback on pitch, timing, rhythm, duration, missed notes, and extra notes.
 > Turn a reference performance into a reusable practice template, then explain
 > exactly how you differed from it.
 
-![Piano Shadow — Practice page with the Piano Roll and transport controls](doc/screenshots/practice.jpg)
+![Piano Shadow — the continuous Practice workspace: compact header, Piano Roll, and a full 88-key keyboard](doc/screenshots/practice.jpg)
+
+![Piano Shadow — the Results page: overall score, six dimension tiles, and a reference-vs-your-performance overlay](doc/screenshots/results.jpg)
 
 ![Piano Shadow demo — picking a song, playing along, and seeing the score breakdown](doc/screenshots/demo.gif)
 
 **Live app:** https://piano-shadow.pages.dev
 
-This is **v0.1, the Web Practice MVP** described in
-[`doc/PIANO_SHADOW_GOAL.md`](doc/PIANO_SHADOW_GOAL.md). See
+The core is the **Web Practice MVP** described in
+[`doc/PIANO_SHADOW_GOAL.md`](doc/PIANO_SHADOW_GOAL.md); **v0.3.0** rebuilt the Practice
+page into a continuous workspace with a full 88-key keyboard. See
 [`doc/ARCHITECTURE.md`](doc/ARCHITECTURE.md) for how it's built and
-[`CHANGELOG.md`](CHANGELOG.md) for what shipped in this release.
+[`CHANGELOG.md`](CHANGELOG.md) for what shipped in each release.
 
 ## Implemented features
 
@@ -26,8 +29,9 @@ This is **v0.1, the Web Practice MVP** described in
   synchronized playhead, and a reference-vs-learner result overlay on Results.
 - **Playback**: play/pause/stop/seek/restart, tempo scale (25%–200%),
   metronome, count-in — all driven from one clock so the playhead can never drift.
-- **Input**: an on-screen keyboard (mouse/touch + QWERTY shortcuts) and an
-  optional Web MIDI device, behind the same input interface.
+- **Input**: a full-size 88-key (A0–C8) on-screen keyboard (mouse/touch + QWERTY
+  shortcuts, horizontal scroll) and an optional Web MIDI device, behind the same
+  input interface.
 - **Practice modes**: Listen (highlight only), Play Along (record + score on
   finish, with live feedback), Wait Mode (pauses at the next note/chord until
   you play it).
@@ -174,20 +178,27 @@ doc/                      product spec, architecture doc, screenshots
 
 ## Roadmap
 
-**v0.2 — Microphone Lab** (spec §36) is done for this round: permission flow,
-`AudioWorklet` capture, two recognizers, latency measurement, confidence
-visualization, and MIDI-ground-truth comparison (reusing the existing
-`practice-engine`) all work end-to-end. What's still open, per
-[`doc/MICROPHONE_LAB_FINDINGS.md`](doc/MICROPHONE_LAB_FINDINGS.md): a real
-microphone/piano test session (not yet run), and — if that goes well — a plan
-for Basic Pitch's latency before a real `MicrophoneAdapter` is even a
-proposal.
+**v0.2 — Microphone Lab** (spec §36) shipped: permission flow, `AudioWorklet`
+capture, two recognizers, latency measurement, confidence visualization, and
+MIDI-ground-truth comparison (reusing the existing `practice-engine`), all in an
+isolated `/lab` page.
 
-Also tracked for later, once v0.1's acceptance criteria are fully exercised in
-practice: Wait Mode chord voicing order, an A/B practice loop, richer Piano
-Roll overlays, and PixiJS/WebGL rendering if a very large score's Piano Roll
-needs it (the current Canvas 2D renderer is isolated behind a component
-boundary specifically so it can be swapped later).
+**v0.3 — Practice workspace redesign** (Phase C of
+[`doc/ROUND_3_REQUIREMENTS.md`](doc/ROUND_3_REQUIREMENTS.md)) shipped: the
+continuous Practice workspace, a full 88-key keyboard, a three-item nav, and a
+rebuilt Results page — presentation only, no engine changes.
+
+**Deferred — Phase D, monophonic microphone input as a real practice source.**
+It is gated (spec §36, `ROUND_3_REQUIREMENTS §D.1`) on a live microphone/real-piano
+validation session that measures Pitchy's pitch accuracy and onset latency on
+real audio; that session has not been run, so no `MicrophoneAdapter` exists yet
+and `NoteInputAdapter` still has only the virtual keyboard and Web MIDI. See
+[`doc/MICROPHONE_LAB_FINDINGS.md`](doc/MICROPHONE_LAB_FINDINGS.md).
+
+Also tracked for later: Wait Mode chord voicing order, an A/B practice loop,
+per-tempo-map metronome, richer Piano Roll overlays, and PixiJS/WebGL rendering
+if a very large score's Piano Roll needs it (the current Canvas 2D renderer is
+isolated behind a component boundary specifically so it can be swapped later).
 
 ## License
 
