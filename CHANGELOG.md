@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.2.0 — UI Modernization + Microphone Lab (2026-09-05)
+## v0.2.0 — UI Modernization + Microphone Lab (2026-09-07)
 
 Implementation of [`doc/NEXT_ROUND_REQUIREMENTS.md`](doc/NEXT_ROUND_REQUIREMENTS.md),
 run sequentially as specified: Phase A shipped and passed its own acceptance criteria
