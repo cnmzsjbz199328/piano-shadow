@@ -8,6 +8,21 @@ is deferred** — it is gated on a live human validation session (`§D.1` D0) th
 been run, so per the requirements Round 3 lands at the end of Phase C plus the written
 findings. See the Roadmap in `README.md`.
 
+### Phase D gate — chord/interval synthetic benchmark (§D.1.1)
+
+- `src/recognition/benchmark.ts` gains `benchmarkPolyphony()` + `DEFAULT_BENCHMARK_CHORDS`
+  — additive sine-wave intervals/triads/7ths, deterministic and headless, same rigour as
+  `PitchyRecognizer.test.ts`; also shown in the Lab's synthetic-benchmark section. It
+  documents Pitchy's monophonic-only failure mode: on a summed chord the McLeod Pitch
+  Method locks to a single spurious low pitch and resolves **0** of the actual chord
+  tones (`monophonicOnly = true`). Microphone chord / polyphonic practice stays out of
+  scope. Written up as a dated addendum in
+  [`doc/MICROPHONE_LAB_FINDINGS.md`](doc/MICROPHONE_LAB_FINDINGS.md).
+- The rest of D0 — the live human microphone/real-piano session and its decision
+  checkpoint (§D.1.2–4) — is still outstanding, so no `MicrophoneAdapter` is added.
+  `NoteInputAdapter` still has only the virtual keyboard and Web MIDI;
+  `practice-engine` still cannot import `recognition/`.
+
 ### Phase C — UI optimization
 
 - **Continuous practice workspace.** `PracticePage` is restructured to match

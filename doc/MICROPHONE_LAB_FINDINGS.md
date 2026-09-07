@@ -87,8 +87,9 @@ Per-tone detail for Pitchy (from the headless Vitest run, `benchmark.test.ts`):
 - **Polyphony is Basic Pitch's real advantage, untested here.** Pitchy is monophonic by
   construction — it cannot detect a chord, only ever the most prominent pitch. All nine
   benchmark tones were single notes, so this synthetic benchmark cannot show that
-  difference. A future round's benchmark should add chord/interval test cases specifically
-  to exercise it.
+  difference. (Round 3 added a chord/interval benchmark — see the
+  [2026-09-07 addendum](#addendum--2026-09-07-round-3-phase-d-gate): Pitchy resolves 0 of
+  the chord tones.)
 - **Onset-latency and MIDI-ground-truth numbers are not included above** — those need a
   real captured take (mic or MIDI+mic together) and could not be produced without a human
   physically playing a keyboard into a microphone in this round. The code paths for both
@@ -142,3 +143,62 @@ audio. What's missing before a `MicrophoneAdapter` becomes a real proposal is a 
 accuracy number against actual piano audio — the open gap above — plus, if that goes well,
 a solution to Basic Pitch's ~1.9s latency (batching, a smaller model, or accepting Pitchy's
 monophonic-only baseline for a first version).
+
+---
+
+## Addendum — 2026-09-07 (Round 3, Phase D gate)
+
+`doc/ROUND_3_REQUIREMENTS.md` Phase D would promote Pitchy's monophonic baseline into a
+real, experimental, opt-in `MicrophoneAdapter`. It is gated by **D0** (§D.1): a live
+human microphone/real-piano validation session, plus one agent-side task that needs no
+microphone. This addendum covers the agent-side task; the human session is still
+outstanding (see [Open gap](#open-gap-no-live-mic-session-yet) — unchanged).
+
+### Agent task done: chord/interval synthetic benchmark (§D.1.1)
+
+`src/recognition/benchmark.ts` gained `benchmarkPolyphony()` +
+`DEFAULT_BENCHMARK_CHORDS` — additive sine-wave chords (equal-amplitude, peak-normalised),
+same deterministic/headless rigour as `PitchyRecognizer.test.ts`, covered by
+`benchmark.test.ts` and surfaced in the Lab's "Run synthetic benchmark" section next to
+the single-note table. Cases: `M3 (C4+E4)`, `P5 (C4+G4)`, `C major (C4+E4+G4)`,
+`A minor (A3+C4+E4)`, `G7 (G3+B3+D4+F4)`.
+
+**Pitchy (baseline) — headless run, deterministic:**
+
+| Chord | Expected MIDIs | Pitchy detected | Chord tones resolved |
+|---|---|---|---|
+| M3 (C4+E4) | 60, 64 | 36 | 0 |
+| P5 (C4+G4) | 60, 67 | 48 | 0 |
+| C major (C4+E4+G4) | 60, 64, 67 | 36 | 0 |
+| A minor (A3+C4+E4) | 57, 60, 64 | 26 | 0 |
+| G7 (G3+B3+D4+F4) | 55, 59, 62, 65 | 31 | 0 |
+
+Mean chord recall **0%**, max voices resolved **0**, `monophonicOnly = true`, mean
+processing ~14ms. On a summed multi-pitch waveform the McLeod Pitch Method locks onto a
+single spurious low "fundamental" (the periodicity of the beating envelope, an octave or
+more below any real chord tone) — it never returns two of the chord's notes, and here
+returned *none* of them. This is the expected monophonic failure mode, now measured:
+**microphone chord / polyphonic practice stays out of scope** (`ROUND_3_REQUIREMENTS`
+"Out of scope"). Basic Pitch's polyphonic numbers come from running the same benchmark in
+a Chromium tab (it needs `OfflineAudioContext`); it is the polyphony-capable path, but its
+~1.9s/clip latency (unchanged from the v0.2 findings) keeps it out of a live adapter.
+
+### Still outstanding: the human D0 session (§D.1.2–4)
+
+Not runnable by the agent — needs a person with a microphone and a MIDI keyboard to,
+in `/lab`: grant mic permission, "Free capture" a real single piano note (confirm the
+level meter responds and `PitchyRecognizer` returns a sensible note name), then run the
+MIDI ground-truth comparison against a built-in demo melody, recording Pitchy's
+pitch-accuracy rate, onset latency (ms), and missed/wrong-note rate on real piano audio.
+
+**Decision checkpoint (§D.1.4):** proceed to Phase D.2 only if, on a clean single-note
+melody, pitch-correct rate ≥ ~90% **and** onset latency < ~80ms. Otherwise Phase D is
+deferred and Round 3 ships Phase C plus these findings.
+
+### Round 3 outcome for Phase D
+
+**Deferred.** The human D0 session has not been run, so the decision checkpoint cannot be
+evaluated and no `MicrophoneAdapter` is built this round. `NoteInputAdapter` still has
+only `VirtualKeyboardAdapter` and `WebMidiAdapter`; `practice-engine` still cannot import
+`recognition/`. When someone runs the D0 session, append its numbers here and — if the
+checkpoint passes — pick up Phase D.2 from `ROUND_3_REQUIREMENTS.md`.
