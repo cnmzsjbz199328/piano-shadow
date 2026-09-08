@@ -1,11 +1,12 @@
 import { create } from 'zustand';
-import type { NoteEvent, Performance } from '@/music-model';
+import { buildPerformance, midiToNoteName, type NoteEvent, type Performance } from '@/music-model';
 import { parseMidiFile, loadDemoPerformance, MidiImportError } from '@/midi';
 import { PlaybackEngine, type PlaybackState as EnginePlaybackState } from '@/playback-engine';
 import {
   VirtualKeyboardAdapter,
   WebMidiAdapter,
   PerformanceRecorder,
+  MicrophoneAdapter,
   type AdapterStatus,
   type MidiInputInfo,
 } from '@/device-adapters';
@@ -95,7 +96,24 @@ interface AppState {
 
   startAttempt(): void;
   finishAttempt(atTime?: number): Promise<void>;
+
+  // single-page recognition
+  recognitionState: RecognitionState;
+  recognitionSource: RecognitionSource | null;
+  recognitionNotes: NoteEvent[];
+  recognitionActiveMidi: number[];
+  recognitionElapsed: number;
+  recognitionLevel: number;
+  recognitionError: string | null;
+  startRecognition(source?: RecognitionSource): Promise<void>;
+  stopRecognition(): Promise<void>;
+  retryRecognition(): Promise<void>;
+  deleteSong(id: string): Promise<void>;
+  clearSong(): void;
 }
+
+export type RecognitionState = 'idle' | 'initializing' | 'listening' | 'stopped' | 'error';
+export type RecognitionSource = 'microphone' | 'midi';
 
 // --- module-scoped engines (one AudioContext / input pipeline for the app's lifetime) ---
 
@@ -116,6 +134,50 @@ const keyboardAdapter = new VirtualKeyboardAdapter(() => engine.getCurrentTime()
 const midiAdapter = new WebMidiAdapter(() => engine.getCurrentTime());
 let recorder: PerformanceRecorder | null = null;
 let liveMatcher: LiveMatcher | null = null;
+let microphoneAdapter: MicrophoneAdapter | null = null;
+let recognitionClockStart = 0;
+let recognitionTimer: number | null = null;
+let recognitionUnsubscribers: Array<() => void> = [];
+const recognitionPending = new Map<number, Array<{ startTime: number; velocity?: number }>>();
+let recognitionRawNotes: Array<{ midi: number; startTime: number; duration: number; velocity?: number }> = [];
+
+function recognitionTime(): number {
+  return Math.max(0, (performance.now() - recognitionClockStart) / 1000);
+}
+
+function clearRecognitionListeners(): void {
+  for (const unsubscribe of recognitionUnsubscribers) unsubscribe();
+  recognitionUnsubscribers = [];
+  recognitionPending.clear();
+  if (recognitionTimer !== null) window.clearInterval(recognitionTimer);
+  recognitionTimer = null;
+}
+
+function noteStartedForRecognition(midi: number, velocity?: number, source: 'microphone' | 'midi-device' | 'virtual-keyboard' = 'microphone', time = recognitionTime()): void {
+  const stack = recognitionPending.get(midi) ?? [];
+  stack.push({ startTime: time, velocity });
+  recognitionPending.set(midi, stack);
+  useAppStore.setState((s) => ({
+    recognitionActiveMidi: [...new Set([...s.recognitionActiveMidi, midi])],
+    recognitionNotes: [...s.recognitionNotes, {
+      id: `recognition-${midi}-${Math.round(time * 1000)}`,
+      midi,
+      noteName: midiToNoteName(midi),
+      startTime: time,
+      duration: 0.12,
+      source,
+      velocity,
+    }],
+  }));
+}
+
+function noteEndedForRecognition(midi: number, time = recognitionTime()): void {
+  const stack = recognitionPending.get(midi);
+  const open = stack?.shift();
+  if (open) recognitionRawNotes.push({ midi, startTime: open.startTime, duration: Math.max(0.01, time - open.startTime), velocity: open.velocity });
+  if (stack && stack.length === 0) recognitionPending.delete(midi);
+  useAppStore.setState((s) => ({ recognitionActiveMidi: s.recognitionActiveMidi.filter((m) => m !== midi) }));
+}
 
 function pushDebugMidiEvent(label: string): void {
   useAppStore.setState((s) => ({ debug: { ...s.debug, lastMidiEvent: label } }));
@@ -205,6 +267,14 @@ export const useAppStore = create<AppState>((set, get) => ({
   settings: persistence.DEFAULT_SETTINGS,
   showDebugPanel: false,
   debug: { playheadTime: 0, lastMidiEvent: null, lastMatchingDecisions: [] },
+
+  recognitionState: 'idle',
+  recognitionSource: null,
+  recognitionNotes: [],
+  recognitionActiveMidi: [],
+  recognitionElapsed: 0,
+  recognitionLevel: 0,
+  recognitionError: null,
 
   async init() {
     const [settings, savedSongs] = await Promise.all([persistence.loadSettings(), persistence.listSongs()]);
@@ -383,6 +453,83 @@ export const useAppStore = create<AppState>((set, get) => ({
       result,
     });
     await get().loadAttemptHistory(song.id);
+  },
+
+  async startRecognition(source = 'microphone') {
+    if (get().recognitionState === 'initializing' || get().recognitionState === 'listening') return;
+    clearRecognitionListeners();
+    recognitionRawNotes = [];
+    recognitionClockStart = performance.now();
+    set({ recognitionState: 'initializing', recognitionSource: source, recognitionNotes: [], recognitionActiveMidi: [], recognitionElapsed: 0, recognitionError: null, importError: null });
+
+    const connect = async () => {
+      if (source === 'microphone') {
+        microphoneAdapter = new MicrophoneAdapter({ onLevel: (rms) => set({ recognitionLevel: rms }) });
+        recognitionUnsubscribers.push(microphoneAdapter.onStatusChange((status) => {
+          if (status === 'error') set({ recognitionError: 'The microphone was disconnected or lost during capture.' });
+        }));
+        recognitionUnsubscribers.push(microphoneAdapter.onNoteStart((n) => noteStartedForRecognition(n.midi, n.velocity, 'microphone', n.time)));
+        recognitionUnsubscribers.push(microphoneAdapter.onNoteEnd((n) => noteEndedForRecognition(n.midi, n.time)));
+        await microphoneAdapter.connect();
+      } else {
+        await midiAdapter.connect();
+        const inputs = midiAdapter.listInputs();
+        const preferred = get().selectedMidiInputId;
+        if (preferred && inputs.some((input) => input.id === preferred)) midiAdapter.selectInput(preferred);
+        else if (inputs[0]) midiAdapter.selectInput(inputs[0].id);
+        recognitionUnsubscribers.push(keyboardAdapter.onNoteStart((n) => noteStartedForRecognition(n.midi, n.velocity, 'virtual-keyboard')));
+        recognitionUnsubscribers.push(keyboardAdapter.onNoteEnd((n) => noteEndedForRecognition(n.midi)));
+        recognitionUnsubscribers.push(midiAdapter.onNoteStart((n) => noteStartedForRecognition(n.midi, n.velocity, 'midi-device')));
+        recognitionUnsubscribers.push(midiAdapter.onNoteEnd((n) => noteEndedForRecognition(n.midi)));
+      }
+    };
+
+    try {
+      await connect();
+      set({ recognitionState: 'listening' });
+      recognitionTimer = window.setInterval(() => set({ recognitionElapsed: recognitionTime() }), 100);
+    } catch (err) {
+      clearRecognitionListeners();
+      await microphoneAdapter?.disconnect().catch(() => undefined);
+      microphoneAdapter = null;
+      set({ recognitionState: 'error', recognitionError: err instanceof Error ? err.message : 'Could not start recognition.' });
+    }
+  },
+
+  async stopRecognition() {
+    if (get().recognitionState !== 'listening') return;
+    const stopTime = recognitionTime();
+    if (microphoneAdapter) await microphoneAdapter.disconnect();
+    for (const midi of [...recognitionPending.keys()]) noteEndedForRecognition(midi, stopTime);
+    clearRecognitionListeners();
+    microphoneAdapter = null;
+    const source = get().recognitionSource === 'midi' ? 'midi-device' : 'microphone';
+    if (recognitionRawNotes.length === 0) {
+      set({ recognitionState: 'error', recognitionError: 'No notes were detected. Play a clear single-note melody and try again.', recognitionActiveMidi: [], recognitionElapsed: stopTime });
+      return;
+    }
+    const name = `Unnamed performance · ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    const performance = buildPerformance(recognitionRawNotes, { name, source, idPrefix: 'recognised' });
+    const record = await persistence.saveSong(performance, false);
+    engine.load(performance);
+    set({ song: performance, songRecord: record, duration: performance.duration, currentTime: 0, lastResult: null, recognitionState: 'stopped', recognitionActiveMidi: [], recognitionElapsed: stopTime, recognitionLevel: 0 });
+    await get().refreshSavedSongs();
+    await get().loadAttemptHistory(performance.id);
+  },
+
+  async retryRecognition() {
+    await get().startRecognition(get().recognitionSource ?? 'microphone');
+  },
+
+  async deleteSong(id) {
+    await persistence.deleteSong(id);
+    if (get().song?.id === id) get().clearSong();
+    await get().refreshSavedSongs();
+  },
+
+  clearSong() {
+    engine.stop();
+    set({ song: null, songRecord: null, duration: 0, currentTime: 0, lastResult: null, lastLearnerPerformance: null, attemptHistory: [], mode: 'listen' });
   },
 }));
 

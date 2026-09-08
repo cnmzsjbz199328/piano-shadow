@@ -163,16 +163,20 @@ doc/                      product spec, architecture doc, screenshots
 - Sequence alignment is an O(m·n) dynamic program; correctness-first for MVP
   song sizes. A very large MIDI file (thousands of notes) would benefit from
   moving evaluation to a Web Worker — not needed at the sizes tested here.
-- **Microphone Lab is experimental and not part of Practice.** `/microphone-lab`
-  benchmarks two pitch recognizers (Pitchy, Basic Pitch) against synthetic
-  audio and MIDI ground truth — see
-  [`doc/MICROPHONE_LAB_FINDINGS.md`](doc/MICROPHONE_LAB_FINDINGS.md) for
-  measured accuracy/latency. Both recognizers hit 100% on clean synthetic
-  tones (a ceiling, not a real-world number); Basic Pitch is ~80x slower per
-  call than Pitchy. No real-microphone/real-piano session has been run yet —
-  that gap, and the explicit "don't merge into Practice yet" gate, are spelled
-  out in the findings doc. No `MicrophoneAdapter` exists; `NoteInputAdapter`
-  still only has the virtual keyboard and Web MIDI (per spec §16/§17).
+- **Microphone recognition is experimental and unvalidated on real pianos.**
+  As of v0.4.0 it is the single page's primary input (`MicrophoneAdapter` →
+  `NoteInputAdapter`), but **only monophonic (single-note) recognition via
+  Pitchy** — chords and polyphonic passages need MIDI or MIDI import, and the
+  UI says so on every microphone surface. The live real-microphone/real-piano
+  validation session required by spec §36 / `ROUND_3_REQUIREMENTS.md` §D.1
+  (measuring pitch accuracy and onset latency on real audio, with a
+  ≥~90% / <~80 ms decision checkpoint) has **not** been run; the synthetic
+  benchmark hits 100% on clean tones, which is a ceiling, not a real-world
+  number. Also not yet done: latency-offset calibration (§D.2.4), a
+  feature-flag opt-in, and `MicrophoneAdapter` unit tests. `/lab`
+  ("Recognition diagnostics" in Settings) still benchmarks Pitchy and Basic
+  Pitch against synthetic audio and MIDI ground truth — see
+  [`doc/MICROPHONE_LAB_FINDINGS.md`](doc/MICROPHONE_LAB_FINDINGS.md).
 - Teacher-recording transcription and an ESP32 adapter remain reserved by
   their interfaces but not implemented, per spec §16/§17.
 
@@ -188,11 +192,19 @@ isolated `/lab` page.
 continuous Practice workspace, a full 88-key keyboard, a three-item nav, and a
 rebuilt Results page — presentation only, no engine changes.
 
-**Deferred — Phase D, monophonic microphone input as a real practice source.**
-It is gated (spec §36, `ROUND_3_REQUIREMENTS §D.1`) on a live microphone/real-piano
-validation session that measures Pitchy's pitch accuracy and onset latency on
-real audio; that session has not been run, so no `MicrophoneAdapter` exists yet
-and `NoteInputAdapter` still has only the virtual keyboard and Web MIDI. See
+**v0.4 — Single-page recognition & practice**
+([`doc/SINGLE_PAGE_RECOGNITION_PLAN.md`](doc/SINGLE_PAGE_RECOGNITION_PLAN.md))
+shipped: one page — `Listen` to recognise playing into a MIDI song, a shared
+Practice / Export / Delete library, and inline results. `MicrophoneAdapter`
+now feeds the practice path (monophonic Pitchy only), labeled experimental.
+
+**Open — validate microphone recognition on real audio.** Still gated (spec §36,
+`ROUND_3_REQUIREMENTS §D.1`) on a live microphone/real-piano session measuring
+Pitchy's pitch accuracy and onset latency, with a ≥~90% / <~80 ms decision
+checkpoint. Until it passes, microphone input stays labeled experimental and
+monophonic-only. Then: latency-offset calibration (§D.2.4), a feature-flag
+opt-in, `MicrophoneAdapter` unit tests, and restoring the deleted route-based
+E2E regressions. See
 [`doc/MICROPHONE_LAB_FINDINGS.md`](doc/MICROPHONE_LAB_FINDINGS.md).
 
 Also tracked for later: Wait Mode chord voicing order, an A/B practice loop,

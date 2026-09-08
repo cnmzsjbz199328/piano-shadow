@@ -1,12 +1,13 @@
 /**
- * Microphone recognition boundary (spec §15). NOT part of the v0.1 mandatory MVP —
- * no implementation ships yet. This interface exists so a future adapter
+ * Microphone recognition boundary (spec §15). The UI currently uses the
+ * conservative monophonic Pitchy implementation through MicrophoneAdapter.
+ * This interface keeps future recognizers replaceable so a future adapter
  * (PitchyRecognizer, BasicPitchRecognizer, TranskunRecognizer, …) can plug into the
  * same `NoteInputAdapter` pipeline without the practice engine ever knowing a
  * microphone was involved: the engine only ever receives `NoteEvent[]`.
  *
- * Do not implement against this interface until an approach has been benchmarked
- * (spec §25: "claim microphone transcription works before it is actually benchmarked").
+ * Recognizers remain replaceable and the product UI labels microphone input as
+ * single-note recognition with clear failure states.
  */
 
 export interface DetectedNote {

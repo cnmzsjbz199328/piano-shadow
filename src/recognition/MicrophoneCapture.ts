@@ -1,8 +1,6 @@
 /**
- * Microphone permission + audio capture for the Microphone Lab (spec §36 goals
- * "microphone permission flow" / "audio capture"). Lab-only: nothing here is wired
- * into `NoteInputAdapter`/`PracticePage` (spec §25, doc/NEXT_ROUND_REQUIREMENTS.md
- * B.3 — a real `MicrophoneAdapter` is a decision for a future round).
+ * Reusable microphone permission + audio capture for the recognition surface.
+ * The adapter layer owns how these samples become NoteInputAdapter events.
  *
  * Captures via `AudioWorkletNode` (not the deprecated `ScriptProcessorNode`). The
  * worklet's processor is loaded from a Blob URL built from an inline source string

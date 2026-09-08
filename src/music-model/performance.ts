@@ -18,13 +18,14 @@ export interface NormalizeOptions {
   idPrefix?: string;
 }
 
-interface RawNote {
+export interface RawNote {
   midi: number;
   startTime: number;
   duration: number;
   velocity?: number;
   channel?: number;
   track?: number;
+  confidence?: number;
 }
 
 /**
@@ -55,6 +56,7 @@ export function normalizeNotes(raw: readonly RawNote[], opts: NormalizeOptions):
       if (n.velocity !== undefined) event.velocity = clamp(Math.round(n.velocity), 0, 127);
       if (n.channel !== undefined) event.channel = n.channel;
       if (n.track !== undefined) event.track = n.track;
+      if (n.confidence !== undefined) event.confidence = clamp(n.confidence, 0, 1);
       return event;
     });
   return sortNotes(events);

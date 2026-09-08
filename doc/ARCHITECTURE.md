@@ -55,12 +55,12 @@ input, same output, always (spec §21.1).
 | Module | Responsibility | Depends on |
 |---|---|---|
 | `music-model` | Canonical types, note-name conversion, normalization | nothing else in `src` |
-| `midi` | Standard MIDI File import (`@tonejs/midi`) → `Performance`; built-in demo melodies | `music-model` |
+| `midi` | Standard MIDI File import (`@tonejs/midi`) → `Performance`; `writeMidiFile` (`Performance` → SMF) for library Export; built-in demo melodies | `music-model` |
 | `quantization` | Non-destructive grid-snap for a future Teach Mode capture pipeline | `music-model` |
 | `practice-engine` | `SequenceAligner` (DP alignment), `timingAnalyzer` (tempo/rhythm split), `scoring`, `evaluatePerformance`, `LiveMatcher` | `music-model` only |
 | `playback-engine` | `PlaybackEngine` (Tone.js transport wrapper: play/pause/seek/tempo/metronome/count-in), `timeMapping` (pure clock math), `Metronome` (pure beat-grid math) | `music-model` |
-| `device-adapters` | `NoteInputAdapter` boundary, `VirtualKeyboardAdapter`, `WebMidiAdapter`, `PerformanceRecorder` | `music-model` |
-| `recognition` | `NoteRecognizer` interface only — no implementation in v0.1 (spec §15) | `music-model` |
+| `device-adapters` | `NoteInputAdapter` boundary, `VirtualKeyboardAdapter`, `WebMidiAdapter`, `MicrophoneAdapter` (composes `recognition/`; monophonic Pitchy, experimental — see below), `PerformanceRecorder` | `music-model`, `recognition` |
+| `recognition` | `NoteRecognizer` interface + `PitchyRecognizer` / `BasicPitchRecognizer` / `MicrophoneCapture` / `benchmark` (used by `MicrophoneAdapter` and the `/lab` diagnostics page) | `music-model` |
 | `services` | `persistence` — IndexedDB (songs, attempts, settings) via `idb` | `music-model`, `practice-engine` |
 | `stores` | `useAppStore` (Zustand) — the only place the engines above are instantiated and wired together | everything below it |
 | `components`, `pages` | React UI; all user-facing language (early/late/wrong-note/etc.) lives here, never in `practice-engine` | `stores` and below |
@@ -100,6 +100,14 @@ rather than independent timers — see that file's doc comment for the reasoning
 Learner input adapters (`VirtualKeyboardAdapter`, `WebMidiAdapter`) are
 constructed with `() => engine.getCurrentTime()` as their clock, so a learner's
 onset and the reference's onset are directly comparable numbers.
+
+`MicrophoneAdapter` (v0.4.0) is used for **recognition only** — capturing playing
+into a fresh `Performance` — not yet as a practice-attempt input. Its onsets run
+on a `performance.now()` clock local to the recognition session and feed a
+standalone song, so they are never compared against the reference clock. Wiring
+the microphone in as a practice input (with the latency-offset compensation
+`ROUND_3_REQUIREMENTS §D.2.4` calls for) is still gated on the §D.1 validation
+session.
 
 ## State ownership
 

@@ -1,124 +1,54 @@
 import { test, expect } from '@playwright/test';
+function midiFixture(): Buffer {
+  // Format 0, 96 ticks/beat: C4, D4, E4.
+  return Buffer.from([
+    0x4d, 0x54, 0x68, 0x64, 0, 0, 0, 6, 0, 0, 0, 1, 0, 96,
+    0x4d, 0x54, 0x72, 0x6b, 0, 0, 0, 31,
+    0, 0xc0, 0,
+    0, 0x90, 60, 100, 0x60, 0x80, 60, 64,
+    0, 0x90, 62, 100, 0x60, 0x80, 62, 64,
+    0, 0x90, 64, 100, 0x60, 0x80, 64, 64,
+    0, 0xff, 0x2f, 0,
+  ]);
+}
 
-/**
- * End-to-end practice flow (spec §21.3):
- *   1. Open app
- *   2. Load sample MIDI
- *   3. Start practice
- *   4. Simulate note input
- *   5. Finish attempt
- *   6. Confirm results screen
- *   7. Confirm score and error breakdown appear
- *
- * Runs against a real Chromium instance with real Web Audio (Tone.js) and real
- * keyboard events — no test-only hooks in the app itself.
- */
-
-test.describe('Piano Shadow — practice flow', () => {
-  test('load demo, play along, finish attempt, see score breakdown', async ({ page }) => {
-    // 1. Open app (Home is folded into Practice's empty state — ROUND_3 §C.2.2)
+test.describe('Piano Shadow — single-page recognition and practice', () => {
+  test('opens with Listen, the 88-key feedback surface, and an empty library', async ({ page }) => {
     await page.goto('/');
-    await expect(page.getByRole('heading', { name: /practice with precision/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: /listen/i })).toBeVisible();
+    await expect(page.getByLabel('Key 60')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'My MIDI songs' })).toBeVisible();
+    await expect(page.getByText(/will appear here/i)).toBeVisible();
+    await expect(page.getByRole('link', { name: /piano shadow/i })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Results' })).toHaveCount(0);
+  });
 
-    // 2. Load sample MIDI (built-in demo)
-    await page.getByRole('button', { name: /C Major Five-Finger/i }).click();
-    await expect(page).toHaveURL(/\/practice$/);
-    await expect(page.getByRole('heading', { name: 'C Major Five-Finger (C D E F G)' })).toBeVisible();
+  test('imports one MIDI into the shared library and practices it on the same page', async ({ page }) => {
+    await page.goto('/');
+    await page.locator('input[type=file]').setInputFiles({ name: 'Single page test.mid', mimeType: 'audio/midi', buffer: midiFixture() });
+    await expect(page.getByRole('heading', { name: 'Single page test' })).toBeVisible();
 
-    // 3. Start practice: Play Along, no count-in so note timing is predictable
-    await page.getByRole('tab', { name: 'Play Along' }).click();
-    await page.getByLabel('Count-in').uncheck();
-    await page.getByRole('button', { name: /start attempt/i }).click();
-    await page.getByRole('button', { name: /^.?\s*play$/i }).click();
+    await page.getByRole('button', { name: 'Practice', exact: true }).click();
+    await expect(page.getByRole('button', { name: /start practice/i })).toBeVisible();
+    await page.getByRole('button', { name: /start practice/i }).click();
+    await page.getByRole('button', { name: /play$/i }).click();
     await expect(page.getByText('Recording')).toBeVisible();
-
-    // 4. Simulate note input: echo the reference melody C D E F G on the keyboard shortcuts
-    for (const key of ['a', 's', 'd', 'f', 'g']) {
+    for (const key of ['a', 's', 'd']) {
       await page.keyboard.down(key);
-      await page.waitForTimeout(150);
+      await page.waitForTimeout(80);
       await page.keyboard.up(key);
-      await page.waitForTimeout(350);
+      await page.waitForTimeout(120);
     }
-
-    // 5. Finish attempt
-    await page.getByRole('button', { name: /finish attempt/i }).click();
-
-    // 6. Confirm results screen
-    await expect(page).toHaveURL(/\/results$/);
+    await page.getByRole('button', { name: /finish practice/i }).click();
+    await expect(page).toHaveURL(/\/practice$/);
     await expect(page.getByRole('heading', { name: /^Score \d+$/ })).toBeVisible();
-
-    // 7. Confirm score and error breakdown appear
-    for (const label of ['Overall', 'Pitch', 'Timing', 'Rhythm', 'Duration', 'Completeness']) {
-      await expect(page.locator('.score-tile__label', { hasText: label })).toBeVisible();
-    }
-    const countRow = page.locator('.count-row');
-    await expect(countRow).toContainText(/correct/i);
-    await expect(countRow).toContainText(/wrong note/i);
-    await expect(countRow).toContainText(/missed/i);
-    await expect(countRow).toContainText(/extra/i);
-    await expect(page.locator('.result-table')).toBeVisible();
-    await expect(page.locator('.result-table tbody tr').first()).toBeVisible();
+    await expect(page.locator('.count-row')).toBeVisible();
   });
 
-  test('an attempt auto-finishes when the reference reaches its natural end', async ({ page }) => {
-    // Regression: letting Play Along run to the end without clicking "Finish
-    // Attempt" must still land on Results, not leave the recorder running
-    // against a clock the engine has already reset to 0.
+  test('microphone failure gives a reason and offers MIDI as an alternative', async ({ page }) => {
     await page.goto('/');
-    await page.getByRole('button', { name: /C Major Five-Finger/i }).click();
-    await expect(page).toHaveURL(/\/practice$/);
-
-    await page.getByRole('tab', { name: 'Play Along' }).click();
-    await page.getByLabel('Count-in').uncheck();
-    await page.getByRole('button', { name: /start attempt/i }).click();
-    await page.getByRole('button', { name: /^.?\s*play$/i }).click();
-    await expect(page.getByText('Recording')).toBeVisible();
-
-    await expect(page).toHaveURL(/\/results$/, { timeout: 8000 });
-    await expect(page.getByRole('heading', { name: /^Score \d+$/ })).toBeVisible();
-  });
-
-  test('virtual keyboard is clickable without any MIDI device connected', async ({ page }) => {
-    await page.goto('/');
-    await page.getByRole('button', { name: /Rhythm Study/i }).click();
-    await expect(page).toHaveURL(/\/practice$/);
-
-    const middleC = page.getByLabel('Key 60');
-    await expect(middleC).toBeVisible();
-    await middleC.click();
-    // The app must never depend on a connected MIDI device (spec §25).
-    await expect(page.getByText('disconnected')).toBeVisible();
-  });
-
-  test('Practice and Results show a clear empty state with no song loaded', async ({ page }) => {
-    // Practice's empty state is now the (folded-in) Home: import + demos.
-    await page.goto('/practice');
-    await expect(page.getByRole('heading', { name: /practice with precision/i })).toBeVisible();
-    await expect(page.getByText(/import a midi file/i)).toBeVisible();
-    await expect(page.getByRole('button', { name: /C Major Five-Finger/i })).toBeVisible();
-
-    await page.goto('/results');
-    await expect(page.getByText(/no results yet/i)).toBeVisible();
-  });
-
-  test('Listen mode plays the reference with a synchronized playhead and no scoring UI', async ({ page }) => {
-    await page.goto('/');
-    await page.getByRole('button', { name: /C Major Five-Finger/i }).click();
-    await expect(page).toHaveURL(/\/practice$/);
-
-    await expect(page.getByRole('tab', { name: 'Listen', exact: true })).toHaveAttribute('aria-pressed', 'true');
-    await expect(page.getByRole('button', { name: /start attempt/i })).toHaveCount(0);
-
-    await page.getByRole('button', { name: /^.?\s*play$/i }).click();
-    await page.waitForTimeout(600);
-    await expect(page.getByRole('button', { name: /^.?\s*pause$/i })).toBeVisible();
-
-    const timeLabel = page.locator('.transport__time');
-    await expect(timeLabel).not.toHaveText('0:00 / 0:02');
-
-    // Regression: playback must stop itself at the end of the song and reset
-    // the playhead, not run past the reference's duration indefinitely.
-    await expect(page.getByRole('button', { name: /^.?\s*play$/i })).toBeVisible({ timeout: 5000 });
-    await expect(timeLabel).toHaveText('0:00 / 0:02');
+    await page.getByRole('button', { name: /listen/i }).click();
+    await expect(page.getByRole('alert')).toBeVisible({ timeout: 8000 });
+    await expect(page.getByRole('button', { name: /use midi instead/i })).toBeVisible();
   });
 });

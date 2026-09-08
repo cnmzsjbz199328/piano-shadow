@@ -16,5 +16,8 @@ export function detectedNotesToNoteEvents(
   detected: readonly DetectedNote[],
   source: NoteSource = 'microphone',
 ): NoteEvent[] {
-  return normalizeNotes(detected, { source, idPrefix: source });
+  return normalizeNotes(
+    detected.map((note) => ({ ...note })),
+    { source, idPrefix: source },
+  );
 }

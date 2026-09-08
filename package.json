@@ -1,6 +1,6 @@
 {
   "name": "piano-shadow",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Browser-first piano practice app: turn a reference performance into a reusable practice template and explain exactly how the learner differs from it.",
   "type": "module",
   "license": "MIT",

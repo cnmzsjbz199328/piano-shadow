@@ -9,3 +9,4 @@ export { Emitter } from './emitter';
 export { VirtualKeyboardAdapter } from './VirtualKeyboardAdapter';
 export { WebMidiAdapter, WebMidiError, type MidiInputInfo } from './WebMidiAdapter';
 export { PerformanceRecorder, type RecorderWarning } from './PerformanceRecorder';
+export { MicrophoneAdapter, type MicrophoneAdapterOptions } from './MicrophoneAdapter';

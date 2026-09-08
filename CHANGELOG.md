@@ -1,5 +1,71 @@
 # Changelog
 
+## v0.4.0 — Single-page recognition & practice (2026-09-08)
+
+Implementation of [`doc/SINGLE_PAGE_RECOGNITION_PLAN.md`](doc/SINGLE_PAGE_RECOGNITION_PLAN.md).
+This is a product-direction change: Piano Shadow is no longer a multi-page MIDI practice
+workbench but a single-page piano recognition and play-along tool. It **supersedes the
+"Phase D deferred" position** stated in the v0.3.0 entry — see the microphone note below
+for exactly what that means and what is still ungated.
+
+### Single-page shell
+
+- **Navigation collapsed to one page.** The `Practice · Results · Lab` nav is gone; the
+  header is just the brand and a `Settings` menu. `/results` and `/lab` stay as
+  compatibility routes, reachable from Settings ("Recognition diagnostics" → `/lab`,
+  "Browser and advanced settings" → `/experiments`); `/microphone-lab` still redirects to
+  `/lab`. No demo songs anywhere in the product surface.
+- `PracticePage` is now a single stateful container: recognition controls on top, the
+  88-key keyboard as the primary visual, the shared song library below, and — after a
+  practice attempt — an inline result card on the same page (no route change to
+  `/results`). `PianoRoll` and `StatusStrip` are no longer on the practice surface.
+
+### Listen → recognise → save
+
+- **`Listen` is the one primary action.** It starts recognition from the microphone by
+  default; on microphone failure the UI states the reason and offers "Use MIDI instead".
+  Recognised notes drive the keyboard in real time; `Stop` segments the stream into a
+  `Performance`, saves it via the existing `persistence` layer, and it appears at the top
+  of the library. A recognition run that detects zero notes is surfaced as a failure, not
+  saved as an empty song.
+- New `src/device-adapters/MicrophoneAdapter.ts` — a `NoteInputAdapter` that composes
+  `MicrophoneCapture` + `PitchyRecognizer` from `recognition/` and emits the same
+  note-on/off contract as MIDI. `practice-engine` still cannot import `recognition/` and
+  has no knowledge of a microphone (lint boundary unchanged).
+- New `src/midi/writeMidiFile.ts` — serialises a `Performance` back to a Standard MIDI
+  File for the library's **Export** action.
+- Shared library (`SongLibrary`): recorded and imported MIDI in one list, each row with
+  **Practice / Export / Delete** (delete confirmed). `Import MIDI` is a secondary action
+  on the library, not a landing-page hero.
+- Practice mode names are now learner-facing: `跟拍 · Play Along`, `跟随 · Wait for me`,
+  `Listen only`, tucked into a "Practice settings" disclosure with tempo / count-in /
+  metronome and the MIDI device + live-feedback detail.
+
+### Microphone status — honest about the open gate
+
+Microphone recognition is now in the practice path **ahead of** the live real-piano
+validation session required by `PIANO_SHADOW_GOAL.md` §36 and `ROUND_3_REQUIREMENTS.md`
+§D.1 (D0). That session has **not** been run. Accordingly:
+
+- Recognition is **Pitchy monophonic only**. Chords / polyphony are not supported from
+  the microphone and the UI says so; use MIDI or MIDI import for those.
+- Every microphone surface carries a permanent "Experimental — real-piano pitch accuracy
+  and onset latency have not been measured yet" note. No microphone output is presented
+  as production-ready (spec §25).
+- Still outstanding from `ROUND_3_REQUIREMENTS.md` §D: the live D0 session and its
+  decision checkpoint, latency-offset calibration (§D.2.4), a feature flag / opt-in, and
+  `MicrophoneAdapter` unit tests with synthetic audio (§D.4). Tracked in
+  [`doc/MICROPHONE_LAB_FINDINGS.md`](doc/MICROPHONE_LAB_FINDINGS.md) and README Roadmap.
+
+### Tests
+
+- `npm run test`, `npm run typecheck`, `npm run lint`, `npm run build`, `npm run test:e2e`
+  all pass. The E2E suite is rewritten for the single-page flow (open → import → practice
+  on one page; microphone-failure fallback). The playback-engine's own unit tests still
+  cover end-of-song stop/reset; the three deleted route-based E2E regressions
+  (auto-finish at end, playhead reset, keyboard-without-MIDI) are noted here as a
+  coverage gap to restore.
+
 ## v0.3.0 — Practice Workspace Redesign (2026-09-07)
 
 Implementation of [`doc/ROUND_3_REQUIREMENTS.md`](doc/ROUND_3_REQUIREMENTS.md), run
