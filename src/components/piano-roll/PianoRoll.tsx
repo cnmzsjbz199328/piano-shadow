@@ -25,12 +25,37 @@ const MIN_PX_PER_SEC = 20;
 const MAX_PX_PER_SEC = 300;
 const DEFAULT_PX_PER_SEC = 90;
 
-const RESULT_COLOR: Record<MatchType, string> = {
-  correct: '#3ecf8e',
-  'wrong-note': '#f2637a',
-  missed: '#f2b84b',
-  extra: '#b98cf0',
-};
+/**
+ * The canvas can't reference CSS custom properties directly, so these read the
+ * live values of `src/index.css`'s design tokens once per draw instead of
+ * duplicating their hex values as literals — keeps the roll's colors in
+ * lockstep with the token system (no drift if the palette is retuned).
+ */
+interface ColorTokens {
+  correct: string;
+  wrongNote: string;
+  missed: string;
+  extra: string;
+  accent: string;
+  text: string;
+  bgElevated2: string;
+  bg: string;
+}
+
+function readColorTokens(): ColorTokens {
+  const style = getComputedStyle(document.documentElement);
+  const v = (name: string) => style.getPropertyValue(name).trim();
+  return {
+    correct: v('--correct'),
+    wrongNote: v('--wrong'),
+    missed: v('--missed'),
+    extra: v('--extra'),
+    accent: v('--accent'),
+    text: v('--text'),
+    bgElevated2: v('--bg-elevated-2'),
+    bg: v('--bg'),
+  };
+}
 
 interface Block {
   x: number;
@@ -92,9 +117,17 @@ export function PianoRoll({ reference, learner, matches, currentTime, duration, 
 
     ctx.clearRect(0, 0, width, rollHeight);
 
+    const tokens = readColorTokens();
+    const RESULT_COLOR: Record<MatchType, string> = {
+      correct: tokens.correct,
+      'wrong-note': tokens.wrongNote,
+      missed: tokens.missed,
+      extra: tokens.extra,
+    };
+
     // row backgrounds
     for (let m = minMidi; m <= maxMidi; m++) {
-      ctx.fillStyle = isBlackKey(m) ? '#141720' : '#10121880';
+      ctx.fillStyle = isBlackKey(m) ? tokens.bgElevated2 : `${tokens.bg}80`;
       ctx.fillRect(0, yForMidi(m, maxMidi), width, ROW_HEIGHT);
     }
 
@@ -149,8 +182,8 @@ export function PianoRoll({ reference, learner, matches, currentTime, duration, 
         }
       }
     } else {
-      for (const n of reference) drawBlock(ctx, n, '#6ea8fe', 0.85, 'solid');
-      if (learner) for (const n of learner) drawBlock(ctx, n, '#f2b84b', 0.55, 'solid');
+      for (const n of reference) drawBlock(ctx, n, tokens.accent, 0.85, 'solid');
+      if (learner) for (const n of learner) drawBlock(ctx, n, tokens.missed, 0.55, 'solid');
     }
 
     blocksRef.current = blocks;
@@ -158,7 +191,7 @@ export function PianoRoll({ reference, learner, matches, currentTime, duration, 
     // playhead
     if (currentTime >= 0) {
       const x = currentTime * pxPerSecond;
-      ctx.strokeStyle = '#eef0f4';
+      ctx.strokeStyle = tokens.text;
       ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.moveTo(x, 0);
@@ -221,7 +254,14 @@ export function PianoRoll({ reference, learner, matches, currentTime, duration, 
             const black = isBlackKey(m);
             return (
               <g key={m}>
-                <rect x={0} y={y} width={GUTTER_WIDTH} height={ROW_HEIGHT} fill={black ? '#17191f' : '#e7e9ee'} stroke="#0b0d12" strokeWidth={0.5} />
+                <rect
+                  x={0}
+                  y={y}
+                  width={GUTTER_WIDTH}
+                  height={ROW_HEIGHT}
+                  style={{ fill: black ? 'var(--key-black)' : 'var(--key-white)', stroke: 'var(--bg)' }}
+                  strokeWidth={0.5}
+                />
                 {m % 12 === 0 && (
                   <text x={3} y={y + ROW_HEIGHT - 1} fontSize={7} fill="#333">
                     {midiToNoteName(m)}

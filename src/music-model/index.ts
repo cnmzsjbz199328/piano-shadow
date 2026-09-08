@@ -12,6 +12,7 @@ export {
   isBlackKey,
   semitoneDistance,
   midiToFrequency,
+  frequencyToMidi,
 } from './noteNames';
 export { makeIdFactory, randomId } from './ids';
 export {

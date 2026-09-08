@@ -45,3 +45,8 @@ export function semitoneDistance(a: number, b: number): number {
 export function midiToFrequency(midi: number): number {
   return 440 * 2 ** ((midi - 69) / 12);
 }
+
+/** Inverse of {@link midiToFrequency}: Hz -> fractional MIDI note number (not rounded). */
+export function frequencyToMidi(frequencyHz: number): number {
+  return 69 + 12 * Math.log2(frequencyHz / 440);
+}

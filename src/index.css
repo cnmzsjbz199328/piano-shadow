@@ -1,22 +1,58 @@
 :root {
   color-scheme: dark;
-  --bg: #0f1115;
-  --bg-elevated: #171a21;
-  --bg-elevated-2: #1f232c;
-  --border: #2b303b;
-  --text: #eef0f4;
-  --text-dim: #9aa2b1;
-  --text-faint: #6b7280;
-  --accent: #6ea8fe;
-  --accent-contrast: #062043;
-  --accent-dim: #2b3f63;
-  --correct: #3ecf8e;
-  --wrong: #f2637a;
-  --missed: #f2b84b;
-  --extra: #b98cf0;
-  --focus-ring: #6ea8fe;
-  --radius: 10px;
+
+  /* neutral surfaces */
+  --bg: #0c0d10;
+  --bg-elevated: #131418;
+  --bg-elevated-2: #1a1c21;
+  --bg-elevated-3: #22252b;
+  --border: #292b31;
+  --border-subtle: #1e2025;
+
+  /* text, 3 emphasis levels */
+  --text: #eef0f3;
+  --text-dim: #9a9da5;
+  --text-faint: #6c6f77;
+
+  /* single accent */
+  --accent: #5e79f0;
+  --accent-contrast: #0b1030;
+  --accent-dim: #222a4d;
+
+  /* semantic result colors — names fixed, values tuned to the neutral palette */
+  --correct: #4cc38a;
+  --wrong: #ef6672;
+  --missed: #e0a53f;
+  --extra: #a97ff2;
+
+  /* piano key colors, tokenized so the keyboard participates in the palette */
+  --key-white: #eceef2;
+  --key-black: #17181c;
+
+  --focus-ring: var(--accent);
+
+  /* spacing scale */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2.5rem;
+
+  /* type scale */
+  --text-xs: 0.75rem;
+  --text-sm: 0.85rem;
+  --text-base: 0.95rem;
+  --text-lg: 1.05rem;
+  --text-xl: 1.5rem;
+  --text-2xl: 2.2rem;
+
+  /* radius scale */
   --radius-sm: 6px;
+  --radius: 10px;
+  --radius-lg: 14px;
+  --radius-full: 999px;
+
   --font-sans:
     'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   --font-mono: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
@@ -37,7 +73,7 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family: var(--font-sans);
-  font-size: 15px;
+  font-size: var(--text-base);
   line-height: 1.5;
 }
 
@@ -137,7 +173,7 @@ select {
 
 .page-header__eyebrow {
   color: var(--text-faint);
-  font-size: 0.8rem;
+  font-size: var(--text-xs);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   margin-bottom: 0.25rem;
@@ -173,7 +209,7 @@ select {
 }
 
 .btn:hover:not(:disabled) {
-  background: #262b36;
+  background: var(--bg-elevated-3);
 }
 
 .btn:disabled {
@@ -249,7 +285,7 @@ select {
   align-items: center;
   gap: 0.3rem;
   padding: 0.15rem 0.5rem;
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   font-size: 0.75rem;
   font-weight: 600;
   border: 1px solid var(--border);
@@ -260,7 +296,7 @@ select {
   content: '';
   width: 0.5rem;
   height: 0.5rem;
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   background: currentColor;
 }
 
@@ -480,15 +516,15 @@ select {
 .piano-roll__tooltip {
   position: absolute;
   pointer-events: none;
-  background: #05070a;
+  background: var(--bg-elevated-2);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   padding: 0.4rem 0.55rem;
-  font-size: 0.78rem;
+  font-size: var(--text-xs);
   color: var(--text);
   white-space: nowrap;
   z-index: 5;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.28);
 }
 
 /* --- piano keyboard --- */
@@ -509,14 +545,14 @@ select {
 }
 
 .piano-key--white {
-  fill: #f3f4f7;
-  stroke: #0b0d12;
+  fill: var(--key-white);
+  stroke: var(--bg);
   stroke-width: 1;
 }
 
 .piano-key--black {
-  fill: #17191f;
-  stroke: #0b0d12;
+  fill: var(--key-black);
+  stroke: var(--bg);
   stroke-width: 1;
 }
 
@@ -525,7 +561,7 @@ select {
 }
 
 .piano-key--reference-active {
-  fill: color-mix(in srgb, var(--correct) 55%, #f3f4f7);
+  fill: color-mix(in srgb, var(--correct) 55%, var(--key-white));
 }
 
 /* --- feedback --- */
@@ -552,7 +588,7 @@ select {
   display: inline-block;
   width: 0.55rem;
   height: 0.55rem;
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   margin-right: 0.4rem;
 }
 .result-dot--correct {
@@ -582,7 +618,7 @@ select {
 }
 
 .score-tile__value {
-  font-size: 1.5rem;
+  font-size: var(--text-xl);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
@@ -600,7 +636,7 @@ select {
 }
 
 .score-tile--overall .score-tile__value {
-  font-size: 2.2rem;
+  font-size: var(--text-2xl);
   color: var(--text);
 }
 
@@ -624,7 +660,7 @@ select {
 .result-table td {
   text-align: left;
   padding: 0.4rem 0.5rem;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .result-table th {
@@ -647,15 +683,15 @@ select {
   width: 340px;
   max-height: 60vh;
   overflow-y: auto;
-  background: rgba(10, 12, 16, 0.96);
+  background: var(--bg-elevated);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 0.75rem;
   font-family: var(--font-mono);
-  font-size: 0.72rem;
-  color: #9be9a8;
+  font-size: var(--text-xs);
+  color: var(--text);
   z-index: 50;
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
 }
 
 .debug-panel dt {
@@ -683,4 +719,66 @@ select {
   background: var(--bg-elevated-2);
   border-radius: var(--radius-sm);
   font-size: 0.88rem;
+}
+
+/* --- microphone lab --- */
+
+.level-meter {
+  width: 100%;
+  height: 0.5rem;
+  background: var(--bg-elevated-2);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  margin: 0.5rem 0 1rem;
+}
+
+.level-meter__fill {
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.05s linear;
+}
+
+.confidence-bar {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  width: 6rem;
+  height: 1rem;
+  background: var(--bg-elevated-2);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+
+.confidence-bar__fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  height: 100%;
+  background: var(--correct);
+}
+
+.confidence-bar__label {
+  position: relative;
+  margin: 0 auto;
+  font-size: var(--text-xs);
+  color: var(--text);
+  mix-blend-mode: difference;
+}
+
+.lab-recognizer-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.lab-recognizer {
+  background: var(--bg-elevated-2);
+  border-radius: var(--radius-sm);
+  padding: 0.75rem;
+}
+
+.lab-latency {
+  font-size: var(--text-sm);
+  color: var(--text-dim);
+  margin: 0.4rem 0;
 }

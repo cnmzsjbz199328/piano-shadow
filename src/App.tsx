@@ -6,12 +6,14 @@ import { HomePage } from '@/pages/HomePage';
 import { PracticePage } from '@/pages/PracticePage';
 import { ResultsPage } from '@/pages/ResultsPage';
 import { ExperimentsPage } from '@/pages/ExperimentsPage';
+import { MicrophoneLabPage } from '@/pages/MicrophoneLabPage';
 
 const NAV_LINKS = [
   { to: '/', label: 'Home', end: true },
   { to: '/practice', label: 'Practice' },
   { to: '/results', label: 'Results' },
   { to: '/experiments', label: 'Experiments' },
+  { to: '/microphone-lab', label: 'Microphone Lab' },
 ];
 
 export default function App() {
@@ -47,6 +49,7 @@ export default function App() {
           <Route path="/practice" element={<PracticePage />} />
           <Route path="/results" element={<ResultsPage />} />
           <Route path="/experiments" element={<ExperimentsPage />} />
+          <Route path="/microphone-lab" element={<MicrophoneLabPage />} />
         </Routes>
       </main>
       {showDebugPanel && <DebugPanel />}

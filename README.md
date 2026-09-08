@@ -136,7 +136,8 @@ src/
   playback-engine/     Tone.js transport wrapper, the single playback clock
   device-adapters/     virtual keyboard + Web MIDI input, performance recorder
   quantization/        grid-snap helper for a future Teach Mode
-  recognition/          NoteRecognizer interface only (spec §15, not implemented)
+  recognition/          Microphone Lab recognizers (Pitchy, Basic Pitch) — experimental,
+                         not wired into Practice; see doc/MICROPHONE_LAB_FINDINGS.md
   services/             IndexedDB persistence
   stores/                Zustand app store — wires the above together
   components/, pages/     the UI
@@ -158,16 +159,29 @@ doc/                      product spec, architecture doc, screenshots
 - Sequence alignment is an O(m·n) dynamic program; correctness-first for MVP
   song sizes. A very large MIDI file (thousands of notes) would benefit from
   moving evaluation to a Web Worker — not needed at the sizes tested here.
-- No microphone input, teacher-recording transcription, or ESP32 adapter —
-  reserved by their interfaces (`NoteRecognizer`, `NoteInputAdapter`) but not
-  implemented, per spec §15/§16/§17.
+- **Microphone Lab is experimental and not part of Practice.** `/microphone-lab`
+  benchmarks two pitch recognizers (Pitchy, Basic Pitch) against synthetic
+  audio and MIDI ground truth — see
+  [`doc/MICROPHONE_LAB_FINDINGS.md`](doc/MICROPHONE_LAB_FINDINGS.md) for
+  measured accuracy/latency. Both recognizers hit 100% on clean synthetic
+  tones (a ceiling, not a real-world number); Basic Pitch is ~80x slower per
+  call than Pitchy. No real-microphone/real-piano session has been run yet —
+  that gap, and the explicit "don't merge into Practice yet" gate, are spelled
+  out in the findings doc. No `MicrophoneAdapter` exists; `NoteInputAdapter`
+  still only has the virtual keyboard and Web MIDI (per spec §16/§17).
+- Teacher-recording transcription and an ESP32 adapter remain reserved by
+  their interfaces but not implemented, per spec §16/§17.
 
 ## Roadmap
 
-**v0.2 — Microphone Lab** (next milestone, spec §36): microphone permission
-flow, single-note pitch detection baseline, a Basic Pitch benchmark, latency
-measurements, and comparison against MIDI ground truth — evaluated before any
-microphone code merges into the stable practice path.
+**v0.2 — Microphone Lab** (spec §36) is done for this round: permission flow,
+`AudioWorklet` capture, two recognizers, latency measurement, confidence
+visualization, and MIDI-ground-truth comparison (reusing the existing
+`practice-engine`) all work end-to-end. What's still open, per
+[`doc/MICROPHONE_LAB_FINDINGS.md`](doc/MICROPHONE_LAB_FINDINGS.md): a real
+microphone/piano test session (not yet run), and — if that goes well — a plan
+for Basic Pitch's latency before a real `MicrophoneAdapter` is even a
+proposal.
 
 Also tracked for later, once v0.1's acceptance criteria are fully exercised in
 practice: Wait Mode chord voicing order, an A/B practice loop, richer Piano

@@ -57,11 +57,11 @@ export function ExperimentsPage() {
       </div>
 
       <div className="panel">
-        <h2>Microphone recognition (v0.2 — not part of this MVP)</h2>
+        <h2>Microphone recognition (v0.2 — not part of Practice)</h2>
         <p>
-          Microphone pitch recognition is intentionally out of scope for v0.1 (spec §15). The practice engine only ever
-          consumes canonical <code>NoteEvent[]</code>, so a future microphone adapter plugs in without any change to
-          matching or scoring. The reserved interface:
+          Microphone pitch recognition is intentionally kept out of Practice (spec §15). The practice engine only
+          ever consumes canonical <code>NoteEvent[]</code>, so a future microphone adapter plugs in without any
+          change to matching or scoring. The reserved interface:
         </p>
         <pre style={{ background: 'var(--bg-elevated-2)', padding: '0.75rem', borderRadius: 'var(--radius-sm)', overflowX: 'auto', fontSize: '0.8rem' }}>
 {`interface NoteRecognizer {
@@ -70,8 +70,10 @@ export function ExperimentsPage() {
 }`}
         </pre>
         <p>
-          v0.2 ("Microphone Lab") will benchmark candidate recognizers (Pitchy, Basic Pitch, Transkun) against MIDI
-          ground truth for latency and accuracy before anything is wired into the stable practice path.
+          The <a href="/microphone-lab">Microphone Lab</a> benchmarks two candidate recognizers (Pitchy, Basic
+          Pitch) against MIDI ground truth for latency and accuracy — see{' '}
+          <code>doc/MICROPHONE_LAB_FINDINGS.md</code> for the measured numbers. Nothing there is wired into
+          Practice yet; that's a decision for a future round, made only after those findings are in.
         </p>
       </div>
 
