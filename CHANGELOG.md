@@ -1,5 +1,51 @@
 # Changelog
 
+## v0.3.0 — Practice Workspace Redesign (2026-09-07)
+
+Implementation of [`doc/ROUND_3_REQUIREMENTS.md`](doc/ROUND_3_REQUIREMENTS.md), run
+sequentially as specified. **Phase C shipped**; **Phase D (monophonic microphone input)
+is deferred** — it is gated on a live human validation session (`§D.1` D0) that has not
+been run, so per the requirements Round 3 lands at the end of Phase C plus the written
+findings. See the Roadmap in `README.md`.
+
+### Phase C — UI optimization
+
+- **Continuous practice workspace.** `PracticePage` is restructured to match
+  [`doc/ui-references/practice-workspace.png`](doc/ui-references/practice-workspace.png):
+  a single-row header (song name · `Listen / Play Along / Wait` segmented control ·
+  compact transport with tempo steppers), the Piano Roll as the page body, a
+  default-collapsed status strip (MIDI connection + live-feedback summary; expands to the
+  full MIDI device picker and rolling live-feedback list), and a full-width **88-key
+  keyboard (A0–C8)** docked at the bottom. The keyboard scrolls horizontally inside its
+  own container, starts centred on middle C, and scrolls the sounding octave into view;
+  it keeps every existing behaviour (highlight, mouse/touch, QWERTY + Z/X octave shift —
+  the QWERTY *mapping* is unchanged).
+- **Navigation collapsed to three items** — `Practice · Results · Lab`. Experiments and
+  the debug-panel toggle move into a top-right gear menu. "Microphone Lab" → "Lab"
+  (`/microphone-lab` still resolves, redirecting to `/lab`). Home is folded into
+  Practice's empty state; `/` renders `PracticePage`. `HomePage.tsx` is retired.
+- **Results page** rebuilt to
+  [`results-page.png`](doc/ui-references/results-page.png): large Overall score, six
+  dimension tiles in one row with mini progress bars, the reference-vs-your-performance
+  overlay, a per-category legend with counts, and `Practice again` / `Back home` bottom-right.
+- **Visual system.** Elevation tokens (`--bg-elevated` / `-2` / `-3`) pulled close
+  together so stacked surfaces read as one calm ground; a single control height; three
+  explicit button tiers (`primary` / secondary / `quiet`); scattered inline styles
+  removed. The four semantic result colours (`--correct` / `--wrong` / `--missed` /
+  `--extra`) keep their names and values, are used only in feedback contexts, and stay
+  mutually distinguishable and distinct from the accent.
+- No new dependency, no light-mode toggle, no webfont. **No change** to the data
+  pipeline, the single authoritative clock, `practice-engine` / `playback-engine`, the
+  scoring code, or `PianoRoll`'s canvas-rendering algorithm — presentation only.
+- Contrast (WCAG relative luminance, against `--bg #0c0d10`, unchanged): body text
+  17.0:1; `--text-dim` 7.2:1; `--correct` 8.8:1, `--wrong` 6.3:1, `--missed` 8.9:1,
+  `--extra` 6.5:1 — all clear 4.5:1. `--text-faint` (micro-labels only, never body copy)
+  3.9:1, unchanged from Phase A.
+- Verified: `npm run test` (107), `npm run typecheck`, `npm run lint`, `npm run test:e2e`
+  (5), `npm run build` all green; acceptance scenarios A–E re-checked on a manual
+  walkthrough. E2E selectors updated only where structure moved (hero heading; the
+  Practice/Home empty-state assertions) — assertion logic unchanged.
+
 ## v0.2.0 — UI Modernization + Microphone Lab (2026-09-07)
 
 Implementation of [`doc/NEXT_ROUND_REQUIREMENTS.md`](doc/NEXT_ROUND_REQUIREMENTS.md),

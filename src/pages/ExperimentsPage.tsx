@@ -24,7 +24,7 @@ export function ExperimentsPage() {
   }
 
   return (
-    <div>
+    <div className="page">
       <header className="page-header">
         <div className="page-header__eyebrow">Experiments</div>
         <h1>Capabilities &amp; roadmap</h1>
@@ -70,7 +70,7 @@ export function ExperimentsPage() {
 }`}
         </pre>
         <p>
-          The <a href="/microphone-lab">Microphone Lab</a> benchmarks two candidate recognizers (Pitchy, Basic
+          The <a href="/lab">Microphone Lab</a> benchmarks two candidate recognizers (Pitchy, Basic
           Pitch) against MIDI ground truth for latency and accuracy — see{' '}
           <code>doc/MICROPHONE_LAB_FINDINGS.md</code> for the measured numbers. Nothing there is wired into
           Practice yet; that's a decision for a future round, made only after those findings are in.

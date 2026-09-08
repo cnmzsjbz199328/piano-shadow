@@ -1,13 +1,22 @@
-import { useRef, useState, type DragEvent } from 'react';
+import { useRef, useState, type DragEvent, type ReactNode } from 'react';
 
 interface FileDropZoneProps {
   onFile: (file: File) => void;
   accept?: string;
   label?: string;
   hint?: string;
+  icon?: ReactNode;
+  className?: string;
 }
 
-export function FileDropZone({ onFile, accept = '.mid,.midi', label = 'Drop a MIDI file here', hint }: FileDropZoneProps) {
+export function FileDropZone({
+  onFile,
+  accept = '.mid,.midi',
+  label = 'Drop a MIDI file here',
+  hint,
+  icon,
+  className,
+}: FileDropZoneProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [active, setActive] = useState(false);
 
@@ -21,7 +30,7 @@ export function FileDropZone({ onFile, accept = '.mid,.midi', label = 'Drop a MI
   return (
     <button
       type="button"
-      className={`drop-zone${active ? ' drop-zone--active' : ''}`}
+      className={`drop-zone${active ? ' drop-zone--active' : ''}${className ? ` ${className}` : ''}`}
       onClick={() => inputRef.current?.click()}
       onDragOver={(e) => {
         e.preventDefault();
@@ -30,6 +39,7 @@ export function FileDropZone({ onFile, accept = '.mid,.midi', label = 'Drop a MI
       onDragLeave={() => setActive(false)}
       onDrop={handleDrop}
     >
+      {icon && <span className="drop-zone__icon">{icon}</span>}
       <strong>{label}</strong>
       <div>{hint ?? 'or click to browse — .mid / .midi'}</div>
       <input

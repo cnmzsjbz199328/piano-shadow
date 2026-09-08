@@ -16,9 +16,9 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Piano Shadow — practice flow', () => {
   test('load demo, play along, finish attempt, see score breakdown', async ({ page }) => {
-    // 1. Open app
+    // 1. Open app (Home is folded into Practice's empty state — ROUND_3 §C.2.2)
     await page.goto('/');
-    await expect(page.getByRole('heading', { name: /turn a performance into a practice template/i })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /practice with precision/i })).toBeVisible();
 
     // 2. Load sample MIDI (built-in demo)
     await page.getByRole('button', { name: /C Major Five-Finger/i }).click();
@@ -91,10 +91,11 @@ test.describe('Piano Shadow — practice flow', () => {
   });
 
   test('Practice and Results show a clear empty state with no song loaded', async ({ page }) => {
+    // Practice's empty state is now the (folded-in) Home: import + demos.
     await page.goto('/practice');
-    await expect(page.getByText(/no song loaded/i)).toBeVisible();
-    await page.getByRole('link', { name: /choose a song/i }).click();
-    await expect(page).toHaveURL('/');
+    await expect(page.getByRole('heading', { name: /practice with precision/i })).toBeVisible();
+    await expect(page.getByText(/import a midi file/i)).toBeVisible();
+    await expect(page.getByRole('button', { name: /C Major Five-Finger/i })).toBeVisible();
 
     await page.goto('/results');
     await expect(page.getByText(/no results yet/i)).toBeVisible();

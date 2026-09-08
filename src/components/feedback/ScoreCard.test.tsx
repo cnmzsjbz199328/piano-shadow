@@ -13,8 +13,12 @@ describe('ScoreCard', () => {
     render(<ScoreCard scores={scores} counts={counts} />);
     expect(screen.getByText('90')).toBeInTheDocument(); // overall
     expect(screen.getByText('78')).toBeInTheDocument(); // timing
-    expect(screen.getByText(/4 correct/)).toBeInTheDocument();
-    expect(screen.getByText(/1 wrong note/)).toBeInTheDocument();
+
+    // Each result category and its count appear on the legend.
+    const correctRow = screen.getByText('Correct').closest('.legend__row');
+    expect(correctRow).toHaveTextContent('4');
+    const wrongRow = screen.getByText('Wrong note').closest('.legend__row');
+    expect(wrongRow).toHaveTextContent('1');
   });
 });
 
