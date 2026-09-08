@@ -11,10 +11,12 @@ import {
   detectedNotesToNoteEvents,
   detectOnsetTime,
   benchmarkRecognizer,
+  benchmarkPolyphony,
   type CaptureStatus,
   type DetectedNote,
   type NoteRecognizer,
   type RecognizerBenchmarkResult,
+  type PolyphonyBenchmarkResult,
 } from '@/recognition';
 import { ScoreCard } from '@/components/feedback/ScoreCard';
 
@@ -219,6 +221,7 @@ export function MicrophoneLabPage() {
 
   // --- synthetic benchmark (section: no microphone needed) ---
   const [benchmarkResults, setBenchmarkResults] = useState<RecognizerBenchmarkResult[] | null>(null);
+  const [polyResults, setPolyResults] = useState<PolyphonyBenchmarkResult[] | null>(null);
   const [benchmarkRunning, setBenchmarkRunning] = useState(false);
   const [benchmarkError, setBenchmarkError] = useState<string | null>(null);
 
@@ -227,13 +230,17 @@ export function MicrophoneLabPage() {
     setBenchmarkError(null);
     try {
       const results: RecognizerBenchmarkResult[] = [];
+      const poly: PolyphonyBenchmarkResult[] = [];
       results.push(await benchmarkRecognizer('Pitchy (baseline)', new PitchyRecognizer()));
+      poly.push(await benchmarkPolyphony('Pitchy (baseline)', new PitchyRecognizer()));
       try {
         results.push(await benchmarkRecognizer('Basic Pitch', new BasicPitchRecognizer()));
+        poly.push(await benchmarkPolyphony('Basic Pitch', new BasicPitchRecognizer()));
       } catch (err) {
         setBenchmarkError(err instanceof Error ? `Basic Pitch benchmark failed: ${err.message}` : 'Basic Pitch benchmark failed.');
       }
       setBenchmarkResults(results);
+      setPolyResults(poly);
     } finally {
       setBenchmarkRunning(false);
     }
@@ -420,8 +427,10 @@ export function MicrophoneLabPage() {
       <div className="panel">
         <h2>2. Synthetic benchmark (no microphone needed)</h2>
         <p>
-          Runs both recognizers against known sine-wave tones instead of a live mic — deterministic and repeatable.
-          This is what produced the numbers in <code>doc/MICROPHONE_LAB_FINDINGS.md</code>.
+          Runs both recognizers against known sine-wave tones — single notes, then additive intervals/triads/7ths —
+          instead of a live mic: deterministic and repeatable. This is what produced the numbers in{' '}
+          <code>doc/MICROPHONE_LAB_FINDINGS.md</code>. The chord table shows why microphone chord practice is out of
+          scope: a monophonic detector (Pitchy) resolves at most one voice per chord.
         </p>
         <button type="button" className="btn btn--primary" disabled={benchmarkRunning} onClick={() => void runSyntheticBenchmark()}>
           {benchmarkRunning ? 'Running…' : 'Run synthetic benchmark'}
@@ -443,6 +452,34 @@ export function MicrophoneLabPage() {
                     <td>{r.recognizerName}</td>
                     <td>
                       {r.accuracyPercent.toFixed(0)}% ({r.cases.filter((c) => c.correct).length}/{r.cases.length})
+                    </td>
+                    <td>{r.meanProcessingMs.toFixed(1)}ms</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {polyResults && (
+          <div style={{ overflowX: 'auto', marginTop: '0.75rem' }}>
+            <h3>Chords (polyphony)</h3>
+            <table className="result-table">
+              <thead>
+                <tr>
+                  <th>Recognizer</th>
+                  <th>Mean chord recall</th>
+                  <th>Max voices resolved</th>
+                  <th>Mean latency</th>
+                </tr>
+              </thead>
+              <tbody>
+                {polyResults.map((r) => (
+                  <tr key={r.recognizerName}>
+                    <td>{r.recognizerName}</td>
+                    <td>{(r.meanRecall * 100).toFixed(0)}%</td>
+                    <td>
+                      {r.maxVoicesResolved}
+                      {r.monophonicOnly ? ' (monophonic-only)' : ''}
                     </td>
                     <td>{r.meanProcessingMs.toFixed(1)}ms</td>
                   </tr>
