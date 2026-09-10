@@ -68,6 +68,7 @@ input, same output, always (spec §21.1).
 | `services` | `persistence` — IndexedDB (songs, attempts, settings) via `idb` | `music-model`, `practice-engine` |
 | `stores` | `useAppStore` (Zustand) — the only place the engines above are instantiated and wired together | everything below it |
 | `components`, `pages` | React UI; all user-facing language (early/late/wrong-note/etc.) lives here, never in `practice-engine` | `stores` and below |
+| `components/sheet-music` | `ScoreView` — read-only staff notation for an imported-MIDI `Performance` via `vexflow` (dynamic import); `secondsToNoteValue` maps quantised seconds → plain note values. Refuses recorded takes. See "Staff-notation view — scope" below. | `music-model`, `quantization`, `stores` |
 
 ## Why a Sequence Aligner, not index matching
 
