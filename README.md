@@ -184,7 +184,10 @@ doc/                      product spec, architecture doc, screenshots
   (measuring pitch accuracy and onset latency on real audio, with a
   ≥~90% / <~80 ms decision checkpoint) has **not** been run; the synthetic
   benchmark hits 100% on clean tones, which is a ceiling, not a real-world
-  number. A manual latency-offset setting exists (v0.7.0), but a guided
+  number. A specific known failure: on a **sustained** note the McLeod Pitch
+  Method locks onto a subharmonic, so long notes are often reported an octave
+  (sometimes a fifth) too low — left for the recognition round. A manual
+  latency-offset setting exists (v0.7.0), but a guided
   tap-to-calibrate flow (§D.2.4) and a feature-flag opt-in are still open. `/lab`
   ("Recognition diagnostics" in Settings) still benchmarks Pitchy and Basic
   Pitch against synthetic audio and MIDI ground truth — see
