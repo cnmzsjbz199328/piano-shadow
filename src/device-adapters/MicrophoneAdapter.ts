@@ -19,7 +19,7 @@ interface ActiveNote {
   lastSeen: number;
 }
 
-const POLL_MS = 60;
+export const POLL_MS = 60;
 const SILENCE_TIMEOUT_MS = 180;
 const DETECTION_WINDOW_SECONDS = 0.45;
 
@@ -108,22 +108,28 @@ export class MicrophoneAdapter implements NoteInputAdapter {
     const windowSamples = Math.max(2048, Math.round(DETECTION_WINDOW_SECONDS * buffer.sampleRate));
     const windowStartSamples = Math.max(0, buffer.audio.length - windowSamples);
     const audioWindow = buffer.audio.subarray(windowStartSamples);
-    const windowStartSeconds = windowStartSamples / buffer.sampleRate;
+    // Real-time span of the detection window. It always ends at "now", so a note
+    // detected at offset `startTime` inside it began at
+    // `now - windowSeconds + startTime` on the one session clock. Anchoring every
+    // boundary on that clock (never on the rolling buffer's sample offset) is
+    // what keeps note-on and note-off comparable — and keeps onsets correct past
+    // the ~20s buffer cap, where the old buffer-relative anchor saturated.
+    const windowSeconds = audioWindow.length / buffer.sampleRate;
     try {
       const notes = await recognizer.process(audioWindow, buffer.sampleRate);
       const latest = notes.at(-1);
-      const now = this.clock();
+      const nowSec = this.clock();
       if (!latest) {
-        if (this.active && now - this.active.lastSeen > SILENCE_TIMEOUT_MS / 1000) this.endActive(now);
+        if (this.active && nowSec - this.active.lastSeen > SILENCE_TIMEOUT_MS / 1000) this.endActive(nowSec);
         return;
       }
-      const detectedTime = Math.max(0, windowStartSeconds + latest.startTime);
+      const detectedTime = Math.max(0, nowSec - windowSeconds + latest.startTime);
       if (!this.active || this.active.midi !== latest.midi) {
         this.endActive(detectedTime);
-        this.active = { midi: latest.midi, startTime: detectedTime, lastSeen: now };
+        this.active = { midi: latest.midi, startTime: detectedTime, lastSeen: nowSec };
         this.starts.emit({ midi: latest.midi, time: detectedTime, velocity: 100 });
       } else {
-        this.active.lastSeen = now;
+        this.active.lastSeen = nowSec;
       }
     } catch {
       // A transient short/empty audio frame should not terminate a session.
