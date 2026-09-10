@@ -1913,3 +1913,16 @@ select {
 .score-view__host svg {
   display: block;
 }
+
+/* VexFlow renders each note as one SVG group. ScoreView toggles this class on
+   that group, so the notehead, stem, flag and accidental light up together
+   without rebuilding the score on every transport tick. */
+.score-view__host svg .score-note--active {
+  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--accent) 65%, transparent));
+}
+
+.score-view__host svg .score-note--active path,
+.score-view__host svg .score-note--active text {
+  fill: var(--accent-hover) !important;
+  stroke: var(--accent-hover) !important;
+}

@@ -76,6 +76,9 @@ interface Tick {
   keys: string[];
   duration: NoteValueCode;
   accidentals: Array<string | null>;
+  /** Reference-timeline span represented by this rendered note/chord. */
+  startTime?: number;
+  endTime?: number;
 }
 
 interface Measure {
@@ -163,6 +166,12 @@ function buildClefMeasure(
       keys: sorted.map((n) => midiToVexKey(n.midi).key),
       duration: value,
       accidentals: sorted.map((n) => midiToVexKey(n.midi).accidental),
+      startTime: group.onset,
+      // Use the source span rather than the shortened engraving duration. A
+      // note can overlap the next onset in MIDI, and it should remain active
+      // for the whole sounding interval even when the approximate notation
+      // clips its displayed value.
+      endTime: Math.max(...group.notes.map((n) => n.startTime + n.duration)),
     });
 
     position = group.onset + noteValueSeconds(value, bpm);
@@ -261,6 +270,47 @@ interface VexModule {
   };
 }
 
+interface RenderedScoreNote {
+  element: SVGElement;
+  startTime: number;
+  endTime: number;
+}
+
+interface RenderedScore {
+  notes: RenderedScoreNote[];
+}
+
+function isHighlightableTransportState(state: string): boolean {
+  return state === 'playing' || state === 'counting-in' || state === 'paused';
+}
+
+function updateScoreHighlight(
+  rendered: RenderedScore | null,
+  currentTime: number,
+  transportState: string,
+  previousActiveIndex: number | null,
+): number | null {
+  if (!rendered) return null;
+
+  const canHighlight = isHighlightableTransportState(transportState);
+  let activeIndex: number | null = null;
+  rendered.notes.forEach((note, index) => {
+    const active =
+      canHighlight && currentTime >= note.startTime - 0.02 && currentTime < note.endTime;
+    note.element.classList.toggle('score-note--active', active);
+    if (active && activeIndex === null) activeIndex = index;
+  });
+
+  if (activeIndex !== null && activeIndex !== previousActiveIndex) {
+    rendered.notes[activeIndex]?.element.scrollIntoView?.({
+      block: 'center',
+      inline: 'nearest',
+      behavior: 'smooth',
+    });
+  }
+  return activeIndex;
+}
+
 function drawVoice(
   VF: VexModule,
   ctx: RenderContext,
@@ -268,7 +318,7 @@ function drawVoice(
   ticks: Tick[],
   ink: string,
   clef: 'treble' | 'bass',
-): void {
+): RenderedScoreNote[] {
   const staveNotes = ticks.map((tick) => {
     const staveNote = new VF.StaveNote({
       keys: tick.keys,
@@ -283,10 +333,19 @@ function drawVoice(
     }
     return staveNote;
   });
-  if (staveNotes.length === 0) return;
+  if (staveNotes.length === 0) return [];
   // FormatAndDraw builds a SOFT-mode Voice internally, so an approximate bar
   // that does not sum to its exact length still renders instead of throwing.
   VF.Formatter.FormatAndDraw(ctx, stave, staveNotes, { alignRests: true });
+
+  return staveNotes.flatMap((staveNote, index) => {
+    const tick = ticks[index];
+    if (!tick || tick.isRest || tick.startTime === undefined || tick.endTime === undefined) {
+      return [];
+    }
+    const element = staveNote.getSVGElement();
+    return element ? [{ element, startTime: tick.startTime, endTime: tick.endTime }] : [];
+  });
 }
 
 function renderScore(
@@ -295,7 +354,7 @@ function renderScore(
   model: ScoreModel,
   containerWidth: number,
   ink: string,
-): void {
+): RenderedScore {
   host.replaceChildren();
 
   const width = Math.max(320, containerWidth || FALLBACK_WIDTH);
@@ -315,6 +374,8 @@ function renderScore(
   const ctx = renderer.getContext();
   ctx.setFillStyle(ink);
   ctx.setStrokeStyle(ink);
+
+  const renderedNotes: RenderedScoreNote[] = [];
 
   for (let row = 0; row < rowCount; row += 1) {
     const rowMeasures = model.measures.slice(
@@ -357,8 +418,8 @@ function renderScore(
       }
 
       try {
-        drawVoice(VF, ctx, treble, measure.treble, ink, 'treble');
-        drawVoice(VF, ctx, bass, measure.bass, ink, 'bass');
+        renderedNotes.push(...drawVoice(VF, ctx, treble, measure.treble, ink, 'treble'));
+        renderedNotes.push(...drawVoice(VF, ctx, bass, measure.bass, ink, 'bass'));
       } catch {
         // One malformed bar must not blank the whole score; leave the empty
         // stave drawn above and carry on.
@@ -367,13 +428,31 @@ function renderScore(
       x += staveWidth;
     }
   }
+
+  // Keep the mapping on the rendered SVG instead of rebuilding the notation
+  // on every transport tick. CSS can then recolour the whole VexFlow group
+  // (notehead, stem, flag and accidental) as one visual unit.
+  renderedNotes.forEach(({ element }, index) => {
+    element.classList.add('score-note');
+    element.dataset.scoreNoteIndex = String(index);
+  });
+
+  return { notes: renderedNotes };
 }
 
 export function ScoreView() {
   const song = useAppStore((s) => s.song);
+  const currentTime = useAppStore((s) => (s as { currentTime?: number }).currentTime ?? 0);
+  const transportState = useAppStore(
+    (s) => (s as { transportState?: string }).transportState ?? 'idle',
+  );
   const hostRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
   const [renderFailed, setRenderFailed] = useState(false);
+  const renderedScoreRef = useRef<RenderedScore | null>(null);
+  const lastActiveIndexRef = useRef<number | null>(null);
+  const playbackRef = useRef({ currentTime, transportState });
+  playbackRef.current = { currentTime, transportState };
 
   const eligible = song != null && song.sourceType === 'midi-file';
   const model = useMemo(
@@ -391,9 +470,16 @@ export function ScoreView() {
   }, [eligible]);
 
   useEffect(() => {
-    if (!model) return;
     const host = hostRef.current;
     if (!host) return;
+
+    if (!model) {
+      host.replaceChildren();
+      renderedScoreRef.current = null;
+      lastActiveIndexRef.current = null;
+      setRenderFailed(false);
+      return;
+    }
 
     let cancelled = false;
     setRenderFailed(false);
@@ -405,10 +491,23 @@ export function ScoreView() {
         // structural `VexModule` at this single boundary.
         const VF = (await import('vexflow')) as unknown as VexModule;
         if (cancelled) return;
-        renderScore(VF, host, model, containerWidth || host.clientWidth, readInk());
+        renderedScoreRef.current = renderScore(
+          VF,
+          host,
+          model,
+          containerWidth || host.clientWidth,
+          readInk(),
+        );
+        lastActiveIndexRef.current = updateScoreHighlight(
+          renderedScoreRef.current,
+          playbackRef.current.currentTime,
+          playbackRef.current.transportState,
+          null,
+        );
       } catch {
         if (!cancelled) {
           host.replaceChildren();
+          renderedScoreRef.current = null;
           setRenderFailed(true);
         }
       }
@@ -418,6 +517,21 @@ export function ScoreView() {
       cancelled = true;
     };
   }, [model, containerWidth]);
+
+  // The playback engine already advances currentTime from Tone.Transport. This
+  // effect only toggles classes on the existing SVG, so highlighting remains
+  // cheap even for a long score.
+  useEffect(() => {
+    const rendered = renderedScoreRef.current;
+    if (!rendered) return;
+
+    lastActiveIndexRef.current = updateScoreHighlight(
+      rendered,
+      currentTime,
+      transportState,
+      lastActiveIndexRef.current,
+    );
+  }, [currentTime, transportState]);
 
   if (!eligible) {
     return (
