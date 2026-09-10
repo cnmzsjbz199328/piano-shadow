@@ -1,4 +1,4 @@
-import { useAppStore, type PracticeMode } from '@/stores/useAppStore';
+import { useAppStore, type PracticeMode, type PracticeVoice } from '@/stores/useAppStore';
 import { MIN_TEMPO_SCALE, MAX_TEMPO_SCALE } from '@/playback-engine';
 import { MidiDevicePanel } from './MidiDevicePanel';
 import { LiveFeedback } from '@/components/feedback/LiveFeedback';
@@ -9,6 +9,12 @@ const MODES: Array<{ id: PracticeMode; label: string; explanation: string }> = [
   { id: 'listen', label: 'Listen only', explanation: 'Hear the reference without recording.' },
 ];
 const TEMPO_STEP = 0.05;
+
+const VOICES: Array<{ id: PracticeVoice; label: string }> = [
+  { id: 'both', label: 'Both hands' },
+  { id: 'left', label: 'Left' },
+  { id: 'right', label: 'Right' },
+];
 
 function formatTime(seconds: number): string {
   const clamped = Math.max(0, seconds);
@@ -26,6 +32,8 @@ export function TransportControls() {
   const metronomeEnabled = useAppStore((s) => s.metronomeEnabled);
   const countInEnabled = useAppStore((s) => s.countInEnabled);
   const isAttemptRunning = useAppStore((s) => s.isAttemptRunning);
+  const practiceVoice = useAppStore((s) => s.practiceVoice);
+  const setPracticeVoice = useAppStore((s) => s.setPracticeVoice);
   const waitingForMidi = useAppStore((s) => s.waitingForMidi);
   const liveFeedback = useAppStore((s) => s.liveFeedback);
   const play = useAppStore((s) => s.play);
@@ -83,6 +91,13 @@ export function TransportControls() {
                 ))}
               </div>
               <span className="practice-settings__help">{MODES.find((item) => item.id === mode)?.explanation}</span>
+              <div className="mode-tabs" role="group" aria-label="Which hand to practise">
+                {VOICES.map((voice) => (
+                  <button key={voice.id} type="button" aria-pressed={practiceVoice === voice.id} disabled={isAttemptRunning} onClick={() => setPracticeVoice(voice.id)}>
+                    {voice.label}
+                  </button>
+                ))}
+              </div>
               <label className="toggle"><input type="checkbox" checked={countInEnabled} onChange={(e) => setCountInEnabled(e.target.checked)} /> Count-in</label>
               <label className="toggle"><input type="checkbox" checked={metronomeEnabled} onChange={(e) => setMetronomeEnabled(e.target.checked)} /> Metronome</label>
               <span className="tempo-control">

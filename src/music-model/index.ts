@@ -15,6 +15,7 @@ export {
   frequencyToMidi,
 } from './noteNames';
 export { makeIdFactory, randomId } from './ids';
+export { inferHands, HAND_SPLIT_MIDI } from './hands';
 export {
   sortNotes,
   normalizeNotes,

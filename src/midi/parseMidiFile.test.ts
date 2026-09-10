@@ -40,6 +40,38 @@ describe('parseMidiFile', () => {
     expect(a.notes.map((n) => n.midi)).toEqual([60, 67]);
   });
 
+  it('infers per-note hand from ≥2 SMF note tracks (low stave → left, high → right)', () => {
+    const midi = new Midi();
+    midi.header.setTempo(120);
+    const low = midi.addTrack();
+    low.addNote({ midi: 48, time: 0, duration: 0.5 });
+    low.addNote({ midi: 52, time: 0.5, duration: 0.5 });
+    const high = midi.addTrack();
+    high.addNote({ midi: 72, time: 0, duration: 0.5 });
+    high.addNote({ midi: 76, time: 0.5, duration: 0.5 });
+
+    const perf = parseMidiFile(midi.toArray());
+    const handOf = (n: number) => perf.notes.find((note) => note.midi === n)?.hand;
+    expect(handOf(48)).toBe('left');
+    expect(handOf(52)).toBe('left');
+    expect(handOf(72)).toBe('right');
+    expect(handOf(76)).toBe('right');
+  });
+
+  it('falls back to a middle-C pitch split for a single-track SMF', () => {
+    const bytes = buildSmf(120, [
+      { midi: 55, time: 0, duration: 0.5 }, // G3  < 60 → left
+      { midi: 60, time: 0.5, duration: 0.5 }, // C4 == 60 → right
+      { midi: 67, time: 1, duration: 0.5 }, // G4      → right
+    ]);
+    const perf = parseMidiFile(bytes);
+    expect(perf.notes.map((n) => [n.midi, n.hand])).toEqual([
+      [55, 'left'],
+      [60, 'right'],
+      [67, 'right'],
+    ]);
+  });
+
   it('rejects non-MIDI bytes with a typed error', () => {
     expect(() => parseMidiFile(new Uint8Array([1, 2, 3, 4, 5]))).toThrow(MidiImportError);
   });

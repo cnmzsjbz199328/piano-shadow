@@ -1,6 +1,7 @@
 import { Midi } from '@tonejs/midi';
 import {
   buildPerformance,
+  inferHands,
   performanceDuration,
   type Performance,
   type TempoPoint,
@@ -75,6 +76,11 @@ export function parseMidiFile(data: ArrayBuffer | Uint8Array, options: ParseMidi
     tempoMap,
     timeSignatureMap: timeSignatureMap.length > 0 ? timeSignatureMap : undefined,
   });
+
+  // Tag every note with an inferred hand ('left' / 'right') so per-hand practice
+  // and multi-track Export work on imported songs. Notes already carry `track`;
+  // `inferHands` prefers that (≥2 note tracks) and otherwise pitch-splits.
+  performance.notes = inferHands(performance.notes);
 
   // Honour an explicit SMF end-of-track / duration if it is longer than the last note.
   performance.duration = Math.max(performance.duration, performanceDuration(performance.notes), midi.duration || 0);

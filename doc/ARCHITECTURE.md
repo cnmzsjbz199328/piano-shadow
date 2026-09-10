@@ -57,8 +57,8 @@ input, same output, always (spec §21.1).
 
 | Module | Responsibility | Depends on |
 |---|---|---|
-| `music-model` | Canonical types, note-name conversion, normalization | nothing else in `src` |
-| `midi` | Standard MIDI File import (`@tonejs/midi`) → `Performance`; `writeMidiFile` (`Performance` → SMF) for library Export; built-in demo melodies | `music-model` |
+| `music-model` | Canonical types, note-name conversion, normalization, `inferHands` (pure left/right hand assignment) | nothing else in `src` |
+| `midi` | Standard MIDI File import (`@tonejs/midi`) → `Performance`, tagging every note with an inferred `hand`; `writeMidiFile` (`Performance` → SMF, one track per `hand`/`track` group) for library Export; built-in demo melodies | `music-model` |
 | `quantization` | Non-destructive grid-snap for a future Teach Mode capture pipeline | `music-model` |
 | `practice-engine` | `SequenceAligner` (DP alignment), `timingAnalyzer` (tempo/rhythm split), `scoring`, `evaluatePerformance`, `LiveMatcher` | `music-model` only |
 | `playback-engine` | `PlaybackEngine` (Tone.js transport wrapper: play/pause/seek/tempo/metronome/count-in), `timeMapping` (pure clock math), `Metronome` (pure beat-grid math) | `music-model`, `audio-engine` |
@@ -119,6 +119,27 @@ standalone song, so they are never compared against the reference clock. Wiring
 the microphone in as a practice input (with the latency-offset compensation
 `ROUND_3_REQUIREMENTS §D.2.4` calls for) is still gated on the §D.1 validation
 session.
+
+## Per-hand practice is a pre-engine filter
+
+`inferHands` (`music-model/hands.ts`, added v0.7.0) tags every imported note with
+`hand: 'left' | 'right'`: by SMF track when the file has ≥2 note tracks (tracks
+ranked by pitch centroid — lowest → left, next → right, any further tracks split
+at middle C), otherwise by a fixed middle-C pitch split. It is pure and
+deterministic; `parseMidiFile` runs it so imported songs carry `hand` alongside
+the `track` they already had.
+
+`useAppStore.practiceVoice` (`'both' | 'left' | 'right'`, default `'both'`)
+selects which hand(s) to practise. The filter is applied to a **clone** of
+`song.notes` in the store — `voiceFilteredNotes(song, voice)` — *before* the
+notes reach `engine.load`, `new LiveMatcher(...)`, or
+`evaluatePerformance(reference, learner)`. `SequenceAligner` / `evaluatePerformance`
+never see the removed notes, so nothing is index-matched around a gap and the
+engine stays a pure `NoteEvent[]` consumer (spec §5, §25). A song with no `hand`
+data (recognised takes, pre-v0.7 imports) has nothing matching a single hand, so
+the filter falls back to the full song. `writeMidiFile` emits one SMF track per
+`hand` group (falling back to `track`, then a single track), so an exported
+two-hand file round-trips its structure.
 
 ## State ownership
 
