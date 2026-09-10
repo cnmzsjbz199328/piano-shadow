@@ -673,50 +673,12 @@ select {
   padding: var(--space-3) var(--space-4) 0;
 }
 
-.recognition-panel {
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  background: linear-gradient(135deg, var(--bg-elevated), var(--bg-elevated-2));
-  padding: var(--space-5);
-}
-
-.recognition-panel--active {
-  border-color: color-mix(in srgb, var(--accent) 60%, var(--border));
-  box-shadow: 0 0 0 1px var(--accent-dim);
-}
-
-.recognition-panel__topline,
 .section-heading,
 .library-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-4);
-}
-
-.recognition-panel__topline {
-  flex-wrap: wrap;
-}
-
-.recognition-panel h1 {
-  font-size: var(--text-2xl);
-  margin: 0.15rem 0 0;
-}
-
-.recognition-panel__status {
-  margin: 0.2rem 0 0;
-  color: var(--text-dim);
-}
-
-.recognition-panel__experimental {
-  margin: var(--space-3) 0 0;
-  padding: 0.5rem 0.7rem;
-  border: 1px solid color-mix(in srgb, var(--extra) 40%, var(--border));
-  border-radius: var(--radius-sm);
-  background: color-mix(in srgb, var(--extra) 9%, var(--bg-elevated));
-  color: var(--text-dim);
-  font-size: var(--text-xs);
-  line-height: 1.4;
 }
 
 .section-heading__eyebrow {
@@ -736,86 +698,6 @@ select {
   color: var(--text-faint);
   font-size: var(--text-xs);
 }
-
-.recognition-panel__actions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: var(--space-2);
-}
-
-.btn--listen {
-  min-width: 7rem;
-  font-size: var(--text-lg);
-}
-
-.record-dot {
-  display: inline-block;
-  width: 0.55rem;
-  height: 0.55rem;
-  margin-right: 0.15rem;
-  border-radius: var(--radius-full);
-  background: currentColor;
-}
-
-.recognition-panel--active .record-dot { animation: recognition-pulse 1.2s ease-in-out infinite; }
-@keyframes recognition-pulse { 50% { opacity: 0.35; transform: scale(0.75); } }
-
-.recognition-meter-row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  margin-top: var(--space-4);
-  color: var(--text-faint);
-  font-size: var(--text-xs);
-}
-
-.recognition-meter {
-  flex: 1;
-  height: 0.45rem;
-  overflow: hidden;
-  border-radius: var(--radius-full);
-  background: var(--bg-elevated-3);
-}
-.recognition-meter span { display: block; height: 100%; border-radius: inherit; background: var(--correct); transition: width 0.08s linear; }
-.recognition-time { min-width: 2.5rem; text-align: right; font-variant-numeric: tabular-nums; }
-
-.recognition-error {
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
-  margin-top: var(--space-4);
-  padding: 0.65rem 0.8rem;
-  border: 1px solid color-mix(in srgb, var(--wrong) 45%, var(--border));
-  border-radius: var(--radius-sm);
-  background: color-mix(in srgb, var(--wrong) 10%, var(--bg-elevated));
-  color: var(--wrong);
-  font-size: var(--text-sm);
-}
-.recognition-error span { color: var(--text-dim); }
-
-.recognition-events {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  min-height: 2.4rem;
-  margin-top: var(--space-4);
-  padding: 0.35rem;
-  overflow-x: auto;
-  border-top: 1px solid var(--border-subtle);
-}
-.recognition-events__empty { color: var(--text-faint); font-size: var(--text-sm); }
-.recognition-event {
-  display: inline-flex;
-  flex-direction: column;
-  align-items: center;
-  min-width: 3.2rem;
-  padding: 0.3rem 0.45rem;
-  border-radius: var(--radius-sm);
-  background: var(--accent-dim);
-  color: var(--text);
-}
-.recognition-event small { color: var(--text-faint); font-size: 0.65rem; }
 
 .practice-empty { display: flex; flex-direction: column; gap: var(--space-5); }
 .import-row { max-width: 25rem; }
@@ -1777,9 +1659,8 @@ select {
 }
 
 @media (max-width: 640px) {
-  .recognition-panel { padding: var(--space-4); }
-  .recognition-panel__topline, .song-row { align-items: flex-start; flex-direction: column; }
-  .recognition-panel__actions, .song-row__actions { justify-content: flex-start; }
+  .song-row { align-items: flex-start; flex-direction: column; }
+  .song-row__actions { justify-content: flex-start; }
   .song-row__actions { width: 100%; }
   .song-row__actions .btn { flex: 1; }
   .tempo-control { margin-left: 0; }

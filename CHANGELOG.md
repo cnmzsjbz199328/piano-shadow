@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased — simplify the Practice surface
+
+The Practice page now follows the intended subtractive direction: the microphone
+recognition experiment panel is removed from the main practice flow. `Practice`
+starts with the song library or score workspace, while recognition remains
+available from Settings → Recognition diagnostics (`/lab`). This removes the
+`Single-page recognition`, `Listen to my playing`, `Ready to listen`, and
+unmeasured experimental notice from the primary practice surface.
+
 ## v0.9.0 — Score / Library flip workspace (2026-09-10)
 
 UI/interaction round from [`doc/UI_OPTIMIZATION_PLAN.md`](doc/UI_OPTIMIZATION_PLAN.md).

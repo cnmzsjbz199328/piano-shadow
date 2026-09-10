@@ -12,13 +12,15 @@ function midiFixture(): Buffer {
   ]);
 }
 
-test.describe('Piano Shadow — single-page recognition and practice', () => {
-  test('opens with Listen, the 88-key feedback surface, and an empty library', async ({ page }) => {
+test.describe('Piano Shadow — focused practice workspace', () => {
+  test('opens with the 88-key feedback surface and an empty library', async ({ page }) => {
     await page.goto('/');
-    await expect(page.getByRole('button', { name: /listen/i })).toBeVisible();
     await expect(page.getByLabel('Key 60')).toBeVisible();
     await expect(page.getByRole('heading', { name: 'My MIDI songs' })).toBeVisible();
     await expect(page.getByText(/will appear here/i)).toBeVisible();
+    await expect(page.getByText('Single-page recognition')).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Listen to my playing' })).toHaveCount(0);
+    await expect(page.getByText('Ready to listen')).toHaveCount(0);
     await expect(page.getByRole('link', { name: /piano shadow/i })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Results' })).toHaveCount(0);
   });
@@ -77,32 +79,11 @@ test.describe('Piano Shadow — single-page recognition and practice', () => {
     expect(dockAfter).toEqual(dockBefore);
   });
 
-  test('microphone failure gives a reason and offers MIDI as an alternative', async ({ page }) => {
+  test('keeps microphone recognition out of the practice page', async ({ page }) => {
     await page.goto('/');
-    await page.getByRole('button', { name: /listen/i }).click();
-    await expect(page.getByRole('alert')).toBeVisible({ timeout: 8000 });
-    await expect(page.getByRole('button', { name: /use midi instead/i })).toBeVisible();
-  });
-
-  test('Listen initialization blocks playback and Stop cancels the pending session', async ({ page }) => {
-    await page.addInitScript(() => {
-      Object.defineProperty(navigator, 'mediaDevices', {
-        configurable: true,
-        value: { getUserMedia: () => new Promise(() => {}) },
-      });
-    });
-    await page.goto('/');
-    await page.locator('input[type=file]').setInputFiles({ name: 'Listen exclusion.mid', mimeType: 'audio/midi', buffer: midiFixture() });
-    await expect(page.getByRole('heading', { name: 'Listen exclusion' })).toBeVisible();
-
-    await page.getByRole('button', { name: 'Listen', exact: true }).click();
-    await expect(page.getByRole('button', { name: /play$/i })).toBeDisabled();
-    await expect(page.getByRole('button', { name: 'Restart from the beginning' })).toBeDisabled();
-    await expect(page.getByRole('button', { name: /start practice/i })).toBeDisabled();
-
-    await page.locator('button.btn--listen').click();
-    await expect(page.getByRole('button', { name: 'Listen', exact: true })).toBeVisible();
-    await expect(page.getByRole('button', { name: /play$/i })).toBeEnabled();
+    await expect(page.getByText(/single-note .* recognition via Pitchy/i)).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /listen/i })).toHaveCount(0);
+    await expect(page.getByRole('link', { name: /piano shadow/i })).toBeVisible();
   });
 
   // --- Restored route-based regressions, adapted to the single page (plan Track G1) ---
@@ -157,7 +138,7 @@ test.describe('Piano Shadow — single-page recognition and practice', () => {
   test('the on-screen keyboard reflects pressed state with no MIDI device connected', async ({ page }) => {
     await page.goto('/');
     // The test browser has no MIDI device; the app must be fully usable anyway (spec §25).
-    await expect(page.getByRole('button', { name: /listen/i })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'My MIDI songs' })).toBeVisible();
 
     const middleC = page.getByLabel('Key 60');
     await expect(middleC).toBeVisible();

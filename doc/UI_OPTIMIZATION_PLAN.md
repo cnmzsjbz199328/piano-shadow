@@ -3,7 +3,7 @@
 > 文档版本：v1.0  
 > 制定日期：2026-09-10  
 > 适用范围：Practice 工作区及其 Score / Library 交互  
-> 状态：已实现（v0.9.0，2026-09-10）。见 [`CHANGELOG.md`](../CHANGELOG.md) 与
+> 状态：进行中（v0.9.0 结构版已实现；视觉减法修正版待验收）。见 [`CHANGELOG.md`](../CHANGELOG.md) 与
 > [`doc/ARCHITECTURE.md`](ARCHITECTURE.md) 的 "Staff-notation view — scope"。
 
 ## 1. 方案摘要
@@ -15,6 +15,7 @@ Practice 页面改造成一个连续的练习工作区：
 - 点击 `Library` 后，主工作区执行一次页面翻转，从 Score 面翻到 Library 面；点击返回或选中曲目后，可翻回 Score 面。
 - 虚拟钢琴键盘保持在主工作区底部的独立 Dock 中。Score 与 Library 翻面时，键盘 Dock 不移动、不缩放、不被挤压。
 - 播放、暂停、停止、速度和当前曲目等高频操作集中到 Practice 顶部工具栏；调试、设备和低频设置保持次要层级。
+- Practice 主流程不展示麦克风识别实验面板；识别实验统一从 Settings 进入 `/lab`，避免实验性说明和状态抢占练习空间。
 
 本方案是 UI/交互层方案，不改变音符模型、匹配算法、播放时钟或评分规则。
 
@@ -297,6 +298,7 @@ Score 面和 Library 面应共享同一套 token、边框、圆角和内边距�
 - Library 与 Score 共享主工作区，并通过页面翻转完成切换。
 - 键盘 Dock 独立于翻转表面，始终保持在底部。
 - 该方案只调整 UI 信息架构和交互，不改变音乐业务逻辑。
+- `Single-page recognition`、`Listen to my playing`、`Ready to listen` 及其实验说明不属于 Practice 主界面；相关能力保留在独立的 Microphone Lab。
 
 ### 实现时需要确认但不阻塞方案
 
@@ -313,4 +315,3 @@ Score 面和 Library 面应共享同一套 token、边框、圆角和内边距�
 - `src/index.css`：设计 token、布局、滚动和响应式样式
 - `doc/ui-references/UI_REVIEW.md`：上一轮 UI 审查记录
 - `doc/NEXT_ROUND_REQUIREMENTS.md`：UI Modernization 阶段的总体约束
-

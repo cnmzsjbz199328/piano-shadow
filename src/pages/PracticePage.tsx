@@ -6,7 +6,6 @@ import { PianoKeyboard } from '@/components/piano/PianoKeyboard';
 import { FallingNotes } from '@/components/piano-roll/FallingNotes';
 import { ScoreSurface } from '@/components/sheet-music/ScoreSurface';
 import { PracticeWorkspace } from '@/components/practice/PracticeWorkspace';
-import { RecognitionControls } from '@/components/practice/RecognitionControls';
 import { SongLibrary } from '@/components/practice/SongLibrary';
 import { ScoreCard } from '@/components/feedback/ScoreCard';
 
@@ -64,8 +63,6 @@ export function PracticePage() {
 
   return (
     <div className="practice-page">
-      <RecognitionControls />
-
       <TransportControls
         surface={practiceSurface}
         onSurfaceChange={requestSurface}

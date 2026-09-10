@@ -44,9 +44,12 @@ page into a continuous workspace with a full 88-key keyboard. See
   finish, with live feedback), Wait Mode (pauses at the next note/chord until
   you play it). **Per-hand practice**: restrict playback and scoring to the
   left or right hand (inferred from the MIDI file's tracks or a pitch split).
-- **Staff notation** (imported MIDI only): a collapsed "Show notation" panel
-  renders a VexFlow grand staff — display-only, an approximation of the file's
-  rhythm, declined for recorded/recognised takes.
+- **Practice workspace**: imported staff notation is the primary Score surface;
+  the MIDI Library flips into the same workspace, while the independently
+  scrollable 88-key keyboard dock stays in place.
+- **Staff notation** (imported MIDI only): a VexFlow grand staff renders inside
+  the Score surface — display-only, an approximation of the file's rhythm,
+  declined for recorded/recognised takes.
 - **Scoring**: deterministic sequence alignment (never index-based — a missed
   or extra note never shifts what comes after it) and five independent
   category scores — Pitch, Timing, Rhythm, Duration, Completeness — plus
@@ -176,10 +179,10 @@ doc/                      product spec, architecture doc, screenshots
   song sizes. A very large MIDI file (thousands of notes) would benefit from
   moving evaluation to a Web Worker — not needed at the sizes tested here.
 - **Microphone recognition is experimental and unvalidated on real pianos.**
-  As of v0.4.0 it is the single page's primary input (`MicrophoneAdapter` →
-  `NoteInputAdapter`), but **only monophonic (single-note) recognition via
+  It is intentionally **not part of the Practice page**. The experimental
+  `/lab` page benchmarks **only monophonic (single-note) recognition via
   Pitchy** — chords and polyphonic passages need MIDI or MIDI import, and the
-  UI says so on every microphone surface. The live real-microphone/real-piano
+  lab UI says so on every microphone surface. The live real-microphone/real-piano
   validation session required by spec §36 / `ROUND_3_REQUIREMENTS.md` §D.1
   (measuring pitch accuracy and onset latency on real audio, with a
   ≥~90% / <~80 ms decision checkpoint) has **not** been run; the synthetic
@@ -207,11 +210,12 @@ isolated `/lab` page.
 continuous Practice workspace, a full 88-key keyboard, a three-item nav, and a
 rebuilt Results page — presentation only, no engine changes.
 
-**v0.4 — Single-page recognition & practice**
+**v0.4 — Single-page recognition & practice (historical)**
 ([`doc/SINGLE_PAGE_RECOGNITION_PLAN.md`](doc/SINGLE_PAGE_RECOGNITION_PLAN.md))
-shipped: one page — `Listen` to recognise playing into a MIDI song, a shared
-Practice / Export / Delete library, and inline results. `MicrophoneAdapter`
-now feeds the practice path (monophonic Pitchy only), labeled experimental.
+was the earlier single-page direction: `Listen` to recognise playing into a
+MIDI song, a shared Practice / Export / Delete library, and inline results.
+The current Practice workspace removes that recognition panel; microphone
+experiments remain isolated at `/lab` until real-piano validation passes.
 
 **v0.4.1 → v0.8.0 — bug fixes + pianokits-inspired features**
 ([`doc/` plan `fizzy-honking-heron`](doc/ARCHITECTURE.md)) shipped in three

@@ -69,7 +69,7 @@ input, same output, always (spec §21.1).
 | `stores` | `useAppStore` (Zustand) — the only place the engines above are instantiated and wired together | everything below it |
 | `components`, `pages` | React UI; all user-facing language (early/late/wrong-note/etc.) lives here, never in `practice-engine` | `stores` and below |
 | `components/sheet-music` | `ScoreView` — read-only staff notation for an imported-MIDI `Performance` via `vexflow` (dynamic import); `ScoreSurface` wraps it in the score face's toolbar + independent scroll viewport; `secondsToNoteValue` maps quantised seconds → plain note values. Refuses recorded takes. See "Staff-notation view — scope" below. | `music-model`, `quantization`, `stores` |
-| `components/practice` | `PracticeWorkspace` — the shared Score/Library flip stage (pure presentation shell: 3D flip on a controlled `surface` prop, `inert` + focus management, `data-instant` reduced-motion/no-3D/phone fallback); `SongLibrary` — the library face; `RecognitionControls`. Surface state is `stores.practiceSurface` (UI-only). | `stores` and below |
+| `components/practice` | `PracticeWorkspace` — the shared Score/Library flip stage (pure presentation shell: 3D flip on a controlled `surface` prop, `inert` + focus management, `data-instant` reduced-motion/no-3D/phone fallback); `SongLibrary` — the library face. Surface state is `stores.practiceSurface` (UI-only). Microphone recognition is intentionally not rendered by Practice; its experimental UI lives at `/lab`. | `stores` and below |
 
 ## Why a Sequence Aligner, not index matching
 
