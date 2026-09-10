@@ -29,12 +29,24 @@ page into a continuous workspace with a full 88-key keyboard. See
   synchronized playhead, and a reference-vs-learner result overlay on Results.
 - **Playback**: play/pause/stop/seek/restart, tempo scale (25%–200%),
   metronome, count-in — all driven from one clock so the playhead can never drift.
+- **Sound**: reference playback and every learner input (on-screen keyboard,
+  live Web MIDI, recognised notes) sound through a shared sampled grand piano
+  (`smplr`), with a transparent synth fallback if samples can't load and a
+  Sound on/off switch.
 - **Input**: a full-size 88-key (A0–C8) on-screen keyboard (mouse/touch + QWERTY
-  shortcuts, horizontal scroll) and an optional Web MIDI device, behind the same
-  input interface.
+  shortcuts) that **scales to fit the viewport** — no page side-scroll on a
+  phone — and an optional Web MIDI device, behind the same input interface.
+  An "Input latency compensation" setting shifts recorded onsets to cancel
+  device/OS delay before scoring.
+- **Falling-notes guide**: a "Synthesia"-style layer above the keyboard during
+  playback/practice, columns aligned to the keys (honours `prefers-reduced-motion`).
 - **Practice modes**: Listen (highlight only), Play Along (record + score on
   finish, with live feedback), Wait Mode (pauses at the next note/chord until
-  you play it).
+  you play it). **Per-hand practice**: restrict playback and scoring to the
+  left or right hand (inferred from the MIDI file's tracks or a pitch split).
+- **Staff notation** (imported MIDI only): a collapsed "Show notation" panel
+  renders a VexFlow grand staff — display-only, an approximation of the file's
+  rhythm, declined for recorded/recognised takes.
 - **Scoring**: deterministic sequence alignment (never index-based — a missed
   or extra note never shifts what comes after it) and five independent
   category scores — Pitch, Timing, Rhythm, Duration, Completeness — plus
@@ -56,7 +68,7 @@ timing/rhythm split, and the single-clock playback design.
 
 ```
 music-model → midi/quantization → practice-engine → playback-engine
-                                                   ↘
+                                                   ↘   ↗ audio-engine
                                        device-adapters → stores/services → components/pages
 ```
 
@@ -172,8 +184,8 @@ doc/                      product spec, architecture doc, screenshots
   (measuring pitch accuracy and onset latency on real audio, with a
   ≥~90% / <~80 ms decision checkpoint) has **not** been run; the synthetic
   benchmark hits 100% on clean tones, which is a ceiling, not a real-world
-  number. Also not yet done: latency-offset calibration (§D.2.4), a
-  feature-flag opt-in, and `MicrophoneAdapter` unit tests. `/lab`
+  number. A manual latency-offset setting exists (v0.7.0), but a guided
+  tap-to-calibrate flow (§D.2.4) and a feature-flag opt-in are still open. `/lab`
   ("Recognition diagnostics" in Settings) still benchmarks Pitchy and Basic
   Pitch against synthetic audio and MIDI ground truth — see
   [`doc/MICROPHONE_LAB_FINDINGS.md`](doc/MICROPHONE_LAB_FINDINGS.md).
@@ -198,13 +210,23 @@ shipped: one page — `Listen` to recognise playing into a MIDI song, a shared
 Practice / Export / Delete library, and inline results. `MicrophoneAdapter`
 now feeds the practice path (monophonic Pitchy only), labeled experimental.
 
+**v0.4.1 → v0.8.0 — bug fixes + pianokits-inspired features**
+([`doc/` plan `fizzy-honking-heron`](doc/ARCHITECTURE.md)) shipped in three
+merge waves: **v0.4.1** — recognition-clock fix (recognised notes no longer ring
+forever), scale-to-fit keyboard, restored E2E regressions;
+**v0.5.0** — sampled piano audio + audible input; **v0.6.0** — falling-notes
+guide; **v0.7.0** — per-hand practice + multi-track export + input-latency
+compensation; **v0.8.0** — VexFlow staff-notation view (imported MIDI,
+display-only).
+
 **Open — validate microphone recognition on real audio.** Still gated (spec §36,
 `ROUND_3_REQUIREMENTS §D.1`) on a live microphone/real-piano session measuring
 Pitchy's pitch accuracy and onset latency, with a ≥~90% / <~80 ms decision
 checkpoint. Until it passes, microphone input stays labeled experimental and
-monophonic-only. Then: latency-offset calibration (§D.2.4), a feature-flag
-opt-in, `MicrophoneAdapter` unit tests, and restoring the deleted route-based
-E2E regressions. See
+monophonic-only. A manual input-latency offset now exists (v0.7.0); a **guided
+tap-to-calibrate** flow (§D.2.4) and a feature-flag opt-in are still open.
+`MicrophoneAdapter` now has unit tests (v0.4.1); the deleted route-based E2E
+regressions are restored (v0.4.1). See
 [`doc/MICROPHONE_LAB_FINDINGS.md`](doc/MICROPHONE_LAB_FINDINGS.md).
 
 Also tracked for later: Wait Mode chord voicing order, an A/B practice loop,
