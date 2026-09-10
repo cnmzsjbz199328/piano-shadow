@@ -1,5 +1,63 @@
 # Changelog
 
+## v0.6.0 — Falling-notes guidance layer (2026-09-10)
+
+Wave 2 · Track D of the `fizzy-honking-heron` plan. A "Synthesia"-style visual guide,
+added without touching the engine, the store logic, or the one authoritative clock.
+
+- **`src/components/piano-roll/FallingNotes.tsx`** — a Canvas 2D layer mounted directly
+  above the on-screen keyboard on `PracticePage`. Each upcoming reference note falls as
+  a column toward the key it belongs to over a fixed 2.5 s look-ahead; the
+  currently-sounding note is highlighted. Column x-positions and widths come from the
+  same `src/components/piano/keyLayout.ts` geometry as the keyboard (Track C), so the
+  columns line up exactly with the keys below and scale fluidly with them on small
+  screens. Colours are read live from the design tokens (`getComputedStyle`), so the
+  layer tracks light/dark like `PianoRoll`.
+- **Clock-safe:** the component only *reads* `currentTime` from the store — no timer, no
+  seek, no engine call. Its single `requestAnimationFrame` is a paint scheduler that
+  coalesces store ticks into one draw; its timestamp is never used as a time source.
+- **Reduced motion:** with `prefers-reduced-motion: reduce`, the layer shows a static
+  stack of the next several upcoming-note markers (updated only as notes are consumed)
+  instead of the falling animation.
+- Shown only while the transport is `playing` / `counting-in` or an attempt is
+  recording; nothing renders on the idle page.
+- Tests: 8 unit cases (renders a canvas, no throw with `song=null` / 0 notes / notes
+  present) + 1 E2E (layer appears on ▶, clears when practice ends).
+
+## v0.5.0 — Sampled piano audio + audible input (2026-09-10)
+
+Wave 2 · Track B of the `fizzy-honking-heron` plan.
+
+- **New `src/audio-engine/` module** (peer of `playback-engine`, may only reach
+  `music-model`; enforced by a new `eslint.config.js` boundary). It owns one
+  module-scoped `SampledInstrument` singleton — `attack(midi, velocity, when?)`,
+  `release(midi, when?)`, `dispose()` — built on **`smplr`**'s velocity-layered
+  `SplendidGrandPiano`. The instrument renders into the existing Tone `AudioContext`
+  (`Tone.getContext().rawContext`), so a `time` from a `Tone.Transport` schedule
+  callback is already in its clock domain: a second *sound source* on the one
+  schedule, not a second timer. The single authoritative clock is unchanged.
+- **Reference playback** (`PlaybackEngine.scheduleNoteEvent`) now sounds through the
+  shared instrument instead of `Tone.PolySynth(Tone.Synth)`. The separate metronome
+  `clickSynth` and the v0.4.1 duration clamps (`MAX_VOICE_SECONDS`,
+  `min(noteDuration, pieceDuration)`) are kept — reference voices are still self-
+  releasing and bounded, so playback still auto-stops.
+- **Audible input:** the on-screen keyboard, live Web MIDI, and recognised notes all
+  sound, wired through one gated store helper in `pressVirtualKey`/`releaseVirtualKey`,
+  `handleLearnerNoteOn`/`Off`, and `noteStarted`/`noteEndedForRecognition`. A new
+  in-memory `soundEnabled` store flag (default on, `setSoundEnabled`) gates and
+  instantly silences all of it (`releaseAll()` on mute). Persisting this preference is
+  left to the later input-latency/settings track.
+- **Graceful degradation, never silence:** the `Tone.PolySynth` voicing is built first
+  and used while samples stream; if `smplr` can't fetch its samples (offline / CDN /
+  CSP) the instrument transparently stays on that synth. `attack`/`release` are wrapped
+  and never throw; headless (no Web Audio) → inert. Samples load lazily and never block
+  playback or the first gesture.
+- New dependency: `smplr@^1.0.0` (zero transitive npm deps; streams its own samples
+  from a static host — no new CDN `<link>`/CSS). `doc/ARCHITECTURE.md` updated.
+- Tests: 7 instrument cases (mocked `smplr`/`tone`, including the load-failure
+  fallback) + 4 store cases (press/release calls `attack`/`release`; `soundEnabled`
+  false suppresses it).
+
 ## v0.4.1 — Live-bug fixes: recognition clock & responsive keyboard (2026-09-10)
 
 Wave 1 of [`doc/` plan `fizzy-honking-heron`](doc/PIANO_SHADOW_GOAL.md) — the two
