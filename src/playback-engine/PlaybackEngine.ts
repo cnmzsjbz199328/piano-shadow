@@ -31,6 +31,15 @@ export const MIN_TEMPO_SCALE = 0.25;
 export const MAX_TEMPO_SCALE = 2;
 export const DEFAULT_COUNT_IN_BEATS = 4;
 
+/**
+ * Hard ceiling (real audio seconds) on any single scheduled voice / draw-end.
+ * Defense in depth: a bad import or a mistimed recognised note-off must never
+ * hold a Tone voice ~forever — which also balloons the perceived song length so
+ * playback never auto-stops (Bug 2). Far above any musically real sustain, even
+ * at MIN_TEMPO_SCALE.
+ */
+const MAX_VOICE_SECONDS = 30;
+
 function clamp(v: number, lo: number, hi: number): number {
   return Math.min(hi, Math.max(lo, v));
 }
@@ -225,11 +234,16 @@ export class PlaybackEngine {
       // moves at 1/scale of that, so both the audible sustain and the note-end
       // callback must be scaled — otherwise a tempo scale != 1 cuts notes short
       // (scale < 1, slower) or lets them ring too long (scale > 1, faster).
-      const realDuration = note.duration / this.scale;
+      // The min against the whole-piece duration and the MAX_VOICE_SECONDS ceiling
+      // are defense in depth: no single note may outlast the song or hold a voice
+      // unbounded (Bug 2). The 0.05s floor stays so very short notes still sound.
+      const refDuration = Math.min(note.duration, this.currentPerformance?.duration ?? note.duration);
+      const realDuration = refDuration / this.scale;
+      const voiceSeconds = Math.min(Math.max(0.05, realDuration), MAX_VOICE_SECONDS);
       const velocity = clamp((note.velocity ?? 100) / 127, 0.05, 1);
-      this.synth?.triggerAttackRelease(note.noteName, Math.max(0.05, realDuration), time, velocity);
+      this.synth?.triggerAttackRelease(note.noteName, voiceSeconds, time, velocity);
       Tone.getDraw().schedule(() => this.options.onReferenceNoteStart?.(note), time);
-      Tone.getDraw().schedule(() => this.options.onReferenceNoteEnd?.(note), time + realDuration);
+      Tone.getDraw().schedule(() => this.options.onReferenceNoteEnd?.(note), time + voiceSeconds);
     }, t);
     this.scheduledNoteIds.push(id);
   }

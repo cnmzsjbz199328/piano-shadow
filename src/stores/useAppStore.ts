@@ -141,6 +141,14 @@ let recognitionUnsubscribers: Array<() => void> = [];
 const recognitionPending = new Map<number, Array<{ startTime: number; velocity?: number }>>();
 let recognitionRawNotes: Array<{ midi: number; startTime: number; duration: number; velocity?: number }> = [];
 
+/**
+ * Hard ceiling on any single recognised note's duration (seconds). No musically
+ * real single note lasts longer, and it is also defense in depth: a mistimed
+ * note-off must never inflate `performance.duration` so far that playback can't
+ * auto-stop (Bug 2). Clamped alongside the live session elapsed time.
+ */
+const MAX_RECOGNISED_NOTE_SECONDS = 12;
+
 function recognitionTime(): number {
   return Math.max(0, (performance.now() - recognitionClockStart) / 1000);
 }
@@ -174,7 +182,15 @@ function noteStartedForRecognition(midi: number, velocity?: number, source: 'mic
 function noteEndedForRecognition(midi: number, time = recognitionTime()): void {
   const stack = recognitionPending.get(midi);
   const open = stack?.shift();
-  if (open) recognitionRawNotes.push({ midi, startTime: open.startTime, duration: Math.max(0.01, time - open.startTime), velocity: open.velocity });
+  if (open) {
+    // Clamp against the raw span, the live session elapsed, and an absolute
+    // musical ceiling — any one of these going wrong (a lost note-off, a clock
+    // mismatch) must not produce a multi-hundred-second "note" that keeps the
+    // reference voice ringing and stops playback ever auto-ending (Bug 2).
+    const rawDuration = time - open.startTime;
+    const duration = Math.max(0.01, Math.min(rawDuration, recognitionTime(), MAX_RECOGNISED_NOTE_SECONDS));
+    recognitionRawNotes.push({ midi, startTime: open.startTime, duration, velocity: open.velocity });
+  }
   if (stack && stack.length === 0) recognitionPending.delete(midi);
   useAppStore.setState((s) => ({ recognitionActiveMidi: s.recognitionActiveMidi.filter((m) => m !== midi) }));
 }
@@ -464,7 +480,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     const connect = async () => {
       if (source === 'microphone') {
-        microphoneAdapter = new MicrophoneAdapter({ onLevel: (rms) => set({ recognitionLevel: rms }) });
+        // Inject the same session clock the rest of the recognition path uses, so
+        // the adapter timestamps note-ons and note-offs on one monotonic clock
+        // (Bug 2: onsets were buffer-relative, offsets were performance.now()).
+        microphoneAdapter = new MicrophoneAdapter({ onLevel: (rms) => set({ recognitionLevel: rms }), clock: () => recognitionTime() });
         recognitionUnsubscribers.push(microphoneAdapter.onStatusChange((status) => {
           if (status === 'error') set({ recognitionError: 'The microphone was disconnected or lost during capture.' });
         }));
