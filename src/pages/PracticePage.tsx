@@ -3,6 +3,7 @@ import { useAppStore } from '@/stores/useAppStore';
 import { midiToNoteName } from '@/music-model';
 import { TransportControls } from '@/components/transport/TransportControls';
 import { PianoKeyboard } from '@/components/piano/PianoKeyboard';
+import { FallingNotes } from '@/components/piano-roll/FallingNotes';
 import { PracticeEmptyState } from '@/components/practice/PracticeEmptyState';
 import { RecognitionControls } from '@/components/practice/RecognitionControls';
 import { SongLibrary } from '@/components/practice/SongLibrary';
@@ -37,6 +38,7 @@ export function PracticePage() {
   const transportState = useAppStore((s) => s.transportState);
   const learnerActiveMidi = useAppStore((s) => s.learnerActiveMidi);
   const recognitionActiveMidi = useAppStore((s) => s.recognitionActiveMidi);
+  const isAttemptRunning = useAppStore((s) => s.isAttemptRunning);
   const pressVirtualKey = useAppStore((s) => s.pressVirtualKey);
   const releaseVirtualKey = useAppStore((s) => s.releaseVirtualKey);
   const isPlaying = transportState === 'playing' || transportState === 'counting-in';
@@ -64,6 +66,8 @@ export function PracticePage() {
       ) : (
         <PracticeEmptyState />
       )}
+
+      {(isPlaying || isAttemptRunning) && <FallingNotes />}
 
       <div className="keyboard-dock">
         <div className="keyboard-dock__meta">

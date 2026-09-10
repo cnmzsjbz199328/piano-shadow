@@ -127,6 +127,14 @@ every relevant prop change, cheap enough at MVP note counts to hit 60fps without
 a WebGL library. It is isolated behind a component boundary so it could be
 swapped for PixiJS later without touching the practice engine or store.
 
+The falling-notes guidance layer (`components/piano-roll/FallingNotes.tsx`, added
+v0.6.0) is a sibling Canvas 2D layer mounted above the keyboard while a session
+runs; it only *reads* `currentTime` from the store (no timer of its own — the
+single clock is preserved), draws upcoming `song.notes` in a fixed look-ahead
+window with x-columns from the shared `components/piano/keyLayout.ts` so lanes
+align with the keys below, and renders static markers instead of animation under
+`prefers-reduced-motion`.
+
 ## Persistence
 
 IndexedDB via `idb` (`services/persistence.ts`): imported songs, practice

@@ -1750,3 +1750,27 @@ select {
   .song-row__actions .btn { flex: 1; }
   .tempo-control { margin-left: 0; }
 }
+
+/* --- falling-notes guidance layer (Track D · v0.6.0) --- */
+
+/* Mirrors `.piano-keyboard`'s box (width:100% capped at the 88-key totalWidth,
+   auto side margins) so the canvas sits in the same column as the keyboard
+   directly below it and note lanes line up with the keys. */
+.falling-notes {
+  width: 100%;
+  max-width: 1352px;
+  margin-inline: auto;
+  margin-bottom: calc(var(--space-2) * -1);
+}
+
+.falling-notes__canvas {
+  display: block;
+  width: 100%;
+  /* Fluid height, same intent as `.piano-keyboard svg`: shorter on a phone
+     rather than a fixed block. Backing-store pixels track this in JS. */
+  height: clamp(56px, 11vw, 116px);
+  border: 1px solid var(--border-subtle);
+  border-bottom: none;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  background: var(--bg-elevated-2);
+}
