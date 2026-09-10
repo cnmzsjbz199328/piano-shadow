@@ -117,4 +117,26 @@ test.describe('Piano Shadow — single-page recognition and practice', () => {
     await middleC.dispatchEvent('pointerup');
     await expect(middleC).toHaveAttribute('aria-pressed', 'false');
   });
+
+  // --- Falling-notes guidance layer (plan Track D) ---
+
+  test('the falling-notes guidance layer appears on Play and clears when practice ends', async ({ page }) => {
+    await page.goto('/');
+    await page.locator('input[type=file]').setInputFiles({ name: 'Falling notes.mid', mimeType: 'audio/midi', buffer: midiFixture() });
+    await expect(page.getByRole('heading', { name: 'Falling notes' })).toBeVisible();
+
+    // Not mounted before a session is running.
+    await expect(page.locator('.falling-notes')).toHaveCount(0);
+
+    await page.getByRole('button', { name: 'Practice', exact: true }).click();
+    await page.getByRole('button', { name: /start practice/i }).click();
+    await page.getByRole('button', { name: /play$/i }).click();
+
+    // The guidance canvas is mounted directly above the keyboard dock while the transport runs.
+    await expect(page.locator('.falling-notes__canvas')).toBeVisible();
+
+    // The fixture auto-finishes at the reference end; the layer unmounts with the session.
+    await expect(page.getByRole('heading', { name: /^Score \d+$/ })).toBeVisible({ timeout: 15000 });
+    await expect(page.locator('.falling-notes')).toHaveCount(0);
+  });
 });
