@@ -1,5 +1,6 @@
 import * as Tone from 'tone';
 import type { NoteEvent, Performance } from '@/music-model';
+import { instrument } from '@/audio-engine';
 import { pin, refFromTransport, transportFromRef, type TimeOrigin } from './timeMapping';
 import { beatSeconds, computeBeatGrid } from './Metronome';
 
@@ -52,7 +53,6 @@ export class PlaybackEngine {
   private countInEnabled = false;
 
   private origin: TimeOrigin = pin(0, 0, 1);
-  private synth: Tone.PolySynth<Tone.Synth> | null = null;
   private clickSynth: Tone.Synth | null = null;
   private scheduledNoteIds: number[] = [];
   private scheduledClickIds: number[] = [];
@@ -188,17 +188,19 @@ export class PlaybackEngine {
   dispose(): void {
     this.stop();
     this.disposed = true;
-    this.synth?.dispose();
     this.clickSynth?.dispose();
+    // The shared `instrument` is an app-lifetime singleton (like this engine
+    // itself in the store) — it is not owned here, so it is not disposed here.
   }
 
   // --- internals ---
 
   private ensureSynths(): void {
-    if (this.synth) return;
-    this.synth = new Tone.PolySynth(Tone.Synth, {
-      envelope: { attack: 0.005, decay: 0.15, sustain: 0.25, release: 0.3 },
-    }).toDestination();
+    // Reference notes are voiced by the shared sampled-piano `instrument`
+    // (audio-engine). Kick off its lazy sample load here — non-blocking; until
+    // the samples are ready it voices notes with the Tone synth fallback.
+    instrument.prepare();
+    if (this.clickSynth) return;
     this.clickSynth = new Tone.Synth({
       oscillator: { type: 'square' },
       envelope: { attack: 0.001, decay: 0.03, sustain: 0, release: 0.02 },
@@ -240,8 +242,10 @@ export class PlaybackEngine {
       const refDuration = Math.min(note.duration, this.currentPerformance?.duration ?? note.duration);
       const realDuration = refDuration / this.scale;
       const voiceSeconds = Math.min(Math.max(0.05, realDuration), MAX_VOICE_SECONDS);
-      const velocity = clamp((note.velocity ?? 100) / 127, 0.05, 1);
-      this.synth?.triggerAttackRelease(note.noteName, voiceSeconds, time, velocity);
+      // Same clamped `voiceSeconds` and same `time` the old synth call took —
+      // the instrument self-releases the voice after `voiceSeconds` (no separate
+      // scheduled note-off), preserving the single-clock schedule.
+      instrument.attack(note.midi, note.velocity ?? 100, time, voiceSeconds);
       Tone.getDraw().schedule(() => this.options.onReferenceNoteStart?.(note), time);
       Tone.getDraw().schedule(() => this.options.onReferenceNoteEnd?.(note), time + voiceSeconds);
     }, t);

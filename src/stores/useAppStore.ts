@@ -11,6 +11,7 @@ import {
   type MidiInputInfo,
 } from '@/device-adapters';
 import { evaluatePerformance, LiveMatcher, type EvaluationResult, type LiveFeedbackItem } from '@/practice-engine';
+import { instrument } from '@/audio-engine';
 import * as persistence from '@/services/persistence';
 import type { AttemptRecord, SettingsRecord, SongRecord } from '@/services/persistence';
 
@@ -69,6 +70,11 @@ interface AppState {
   showDebugPanel: boolean;
   debug: DebugSnapshot;
 
+  /** Whether note-on input (keyboard / MIDI / recognised notes) is audible via
+   *  the sampled instrument. In-memory only for now — persistence is a later
+   *  track's job. Off in headless tests keeps them silent. */
+  soundEnabled: boolean;
+
   // actions
   init(): Promise<void>;
   importMidiFile(bytes: ArrayBuffer, name?: string): Promise<void>;
@@ -87,6 +93,7 @@ interface AppState {
   setMetronomeEnabled(on: boolean): void;
   setCountInEnabled(on: boolean): void;
   setShowDebugPanel(on: boolean): void;
+  setSoundEnabled(on: boolean): void;
 
   connectMidi(): Promise<void>;
   selectMidiInput(id: string | null): void;
@@ -161,7 +168,23 @@ function clearRecognitionListeners(): void {
   recognitionTimer = null;
 }
 
+/**
+ * Make a note-on / note-off audible through the shared sampled instrument
+ * (audio-engine). Every audible-input path (on-screen keyboard, live Web MIDI,
+ * recognised notes) funnels through these two so the `soundEnabled` gate lives
+ * in exactly one place. Turning sound off also calls `instrument.releaseAll()`
+ * (see `setSoundEnabled`), so a note held across the toggle can't stick even
+ * though `audibleRelease` is gated too.
+ */
+function audibleAttack(midi: number, velocity?: number): void {
+  if (useAppStore.getState().soundEnabled) instrument.attack(midi, velocity);
+}
+function audibleRelease(midi: number): void {
+  if (useAppStore.getState().soundEnabled) instrument.release(midi);
+}
+
 function noteStartedForRecognition(midi: number, velocity?: number, source: 'microphone' | 'midi-device' | 'virtual-keyboard' = 'microphone', time = recognitionTime()): void {
+  audibleAttack(midi, velocity);
   const stack = recognitionPending.get(midi) ?? [];
   stack.push({ startTime: time, velocity });
   recognitionPending.set(midi, stack);
@@ -180,6 +203,7 @@ function noteStartedForRecognition(midi: number, velocity?: number, source: 'mic
 }
 
 function noteEndedForRecognition(midi: number, time = recognitionTime()): void {
+  audibleRelease(midi);
   const stack = recognitionPending.get(midi);
   const open = stack?.shift();
   if (open) {
@@ -201,6 +225,7 @@ function pushDebugMidiEvent(label: string): void {
 
 function handleLearnerNoteOn(midi: number, velocity: number | undefined, label: string): void {
   pushDebugMidiEvent(label);
+  audibleAttack(midi, velocity);
   useAppStore.setState((s) => ({ learnerActiveMidi: [...new Set([...s.learnerActiveMidi, midi])] }));
 
   const state = useAppStore.getState();
@@ -228,6 +253,7 @@ function handleLearnerNoteOn(midi: number, velocity: number | undefined, label: 
 }
 
 function handleLearnerNoteOff(midi: number): void {
+  audibleRelease(midi);
   useAppStore.setState((s) => ({ learnerActiveMidi: s.learnerActiveMidi.filter((m) => m !== midi) }));
 }
 
@@ -283,6 +309,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   settings: persistence.DEFAULT_SETTINGS,
   showDebugPanel: false,
   debug: { playheadTime: 0, lastMidiEvent: null, lastMatchingDecisions: [] },
+  soundEnabled: true,
 
   recognitionState: 'idle',
   recognitionSource: null,
@@ -411,6 +438,12 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ showDebugPanel: on });
     void persistence.saveSettings({ showDebugPanel: on }).then((s) => set({ settings: s }));
   },
+  setSoundEnabled(on) {
+    set({ soundEnabled: on });
+    // Silence anything currently ringing so muting takes effect immediately even
+    // for a key/note held down across the toggle. In-memory only — not persisted.
+    if (!on) instrument.releaseAll();
+  },
 
   async connectMidi() {
     try {
@@ -431,9 +464,14 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   pressVirtualKey(midi, velocity) {
+    // Sound the note here for immediacy; the adapter's `handleLearnerNoteOn`
+    // reaches `audibleAttack` again synchronously — the instrument dedups the
+    // duplicate (same pitch within a few ms) into a single voice.
+    audibleAttack(midi, velocity);
     keyboardAdapter.press(midi, velocity);
   },
   releaseVirtualKey(midi) {
+    audibleRelease(midi);
     keyboardAdapter.release(midi);
   },
 

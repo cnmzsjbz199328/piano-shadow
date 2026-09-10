@@ -62,6 +62,10 @@ export default tseslint.config(
   boundary('quantization', ['midi', 'practice-engine', 'playback-engine', 'device-adapters', 'stores', 'services', 'components', 'pages', 'recognition']),
   boundary('midi', ['practice-engine', 'playback-engine', 'device-adapters', 'stores', 'services', 'components', 'pages', 'recognition']),
   boundary('playback-engine', ['device-adapters', 'stores', 'services', 'components', 'pages', 'recognition']),
+  // `audio-engine` is a peer of `playback-engine`: it turns note numbers into
+  // sound and may only reach `music-model`. `playback-engine` and `stores` are
+  // free to import `@/audio-engine` (no rule forbids it here).
+  boundary('audio-engine', ['midi', 'quantization', 'practice-engine', 'playback-engine', 'device-adapters', 'stores', 'services', 'components', 'pages', 'recognition']),
   boundary('device-adapters', ['stores', 'services', 'components', 'pages']),
   {
     files: ['tests/**/*.{ts,tsx}', 'src/**/*.{test,spec}.{ts,tsx}'],
