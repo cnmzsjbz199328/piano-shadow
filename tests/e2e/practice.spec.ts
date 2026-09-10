@@ -52,6 +52,27 @@ test.describe('Piano Shadow — single-page recognition and practice', () => {
     await expect(page.getByRole('button', { name: /use midi instead/i })).toBeVisible();
   });
 
+  test('Listen initialization blocks playback and Stop cancels the pending session', async ({ page }) => {
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator, 'mediaDevices', {
+        configurable: true,
+        value: { getUserMedia: () => new Promise(() => {}) },
+      });
+    });
+    await page.goto('/');
+    await page.locator('input[type=file]').setInputFiles({ name: 'Listen exclusion.mid', mimeType: 'audio/midi', buffer: midiFixture() });
+    await expect(page.getByRole('heading', { name: 'Listen exclusion' })).toBeVisible();
+
+    await page.getByRole('button', { name: 'Listen', exact: true }).click();
+    await expect(page.getByRole('button', { name: /play$/i })).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Restart from the beginning' })).toBeDisabled();
+    await expect(page.getByRole('button', { name: /start practice/i })).toBeDisabled();
+
+    await page.locator('button.btn--listen').click();
+    await expect(page.getByRole('button', { name: 'Listen', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: /play$/i })).toBeEnabled();
+  });
+
   // --- Restored route-based regressions, adapted to the single page (plan Track G1) ---
 
   test('an attempt auto-finishes when the reference reaches its end, with no "Finish practice" click', async ({ page }) => {

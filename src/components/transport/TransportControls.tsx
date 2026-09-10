@@ -48,6 +48,7 @@ export function TransportControls() {
   const finishAttempt = useAppStore((s) => s.finishAttempt);
 
   const playing = transportState === 'playing' || transportState === 'counting-in';
+  const recognitionActive = useAppStore((s) => s.recognitionState === 'initializing' || s.recognitionState === 'listening');
   const disabled = !song;
   return (
     <div className="song-transport">
@@ -57,11 +58,11 @@ export function TransportControls() {
           <h2 className="practice-header__title" title={song?.name}>{song?.name ?? 'No reference loaded'}</h2>
         </div>
         <div className="practice-header__transport">
-          <button type="button" className="btn btn--primary" disabled={disabled} onClick={() => (playing ? pause() : void play())}>
+          <button type="button" className="btn btn--primary" disabled={disabled || recognitionActive} onClick={() => (playing ? pause() : void play())}>
             <span aria-hidden>{playing ? 'Ⅱ' : '▶'}</span> {playing ? 'Pause' : 'Play'}
           </button>
           <button type="button" className="btn btn--quiet btn--sm" disabled={disabled} onClick={stop}>Stop</button>
-          <button type="button" className="btn btn--icon" aria-label="Restart from the beginning" disabled={disabled} onClick={restart}>↶</button>
+          <button type="button" className="btn btn--icon" aria-label="Restart from the beginning" disabled={disabled || recognitionActive} onClick={restart}>↶</button>
         </div>
       </div>
 
@@ -72,7 +73,7 @@ export function TransportControls() {
             <input className="practice-subrow__seek" type="range" min={0} max={Math.max(duration, 0.01)} step={0.01} value={Math.min(currentTime, duration)} disabled={disabled} onChange={(e) => seek(Number(e.target.value))} aria-label="Seek" />
             <span className="practice-subrow__attempt">
               {!isAttemptRunning ? (
-                <button type="button" className="btn btn--primary btn--sm" onClick={startAttempt}>Start practice</button>
+                <button type="button" className="btn btn--primary btn--sm" disabled={recognitionActive} onClick={startAttempt}>Start practice</button>
               ) : (
                 <button type="button" className="btn btn--danger btn--sm" onClick={() => void finishAttempt()}>Finish practice</button>
               )}
@@ -85,7 +86,7 @@ export function TransportControls() {
             <div className="practice-settings__body">
               <div className="mode-tabs" role="tablist" aria-label="Practice mode">
                 {MODES.map((item) => (
-                  <button key={item.id} type="button" role="tab" aria-selected={mode === item.id} aria-pressed={mode === item.id} disabled={isAttemptRunning} onClick={() => setMode(item.id)}>
+                  <button key={item.id} type="button" role="tab" aria-selected={mode === item.id} aria-pressed={mode === item.id} disabled={isAttemptRunning || recognitionActive} onClick={() => setMode(item.id)}>
                     {item.label}
                   </button>
                 ))}

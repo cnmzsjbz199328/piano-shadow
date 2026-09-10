@@ -27,20 +27,22 @@ vi.mock('@/practice-engine', async (importOriginal) => {
 });
 
 import type * as PracticeEngineModule from '@/practice-engine';
-import { useAppStore, _getEnginesForTests } from './useAppStore';
+import { useAppStore, _getEnginesForTests, _getRecognitionForTests } from './useAppStore';
 import { PerformanceRecorder } from '@/device-adapters';
 import { evaluatePerformance } from '@/practice-engine';
 import { buildPerformance, inferHands } from '@/music-model';
 
 beforeEach(() => {
+  _getEnginesForTests().keyboardAdapter.releaseAll();
   vi.clearAllMocks();
-  useAppStore.setState({ soundEnabled: true });
+  useAppStore.setState({ soundEnabled: true, recognitionState: 'idle', recognitionSource: null, recognitionNotes: [], recognitionActiveMidi: [], recognitionElapsed: 0, isAttemptRunning: false });
 });
 
 describe('useAppStore — audible input wiring', () => {
   it('pressing a virtual key sounds the note through the instrument', () => {
     useAppStore.getState().pressVirtualKey(60, 100);
     expect(audio.attack).toHaveBeenCalledWith(60, 100);
+    expect(audio.attack).toHaveBeenCalledTimes(1);
   });
 
   it('releasing a virtual key releases the note through the instrument', () => {
@@ -50,7 +52,7 @@ describe('useAppStore — audible input wiring', () => {
     expect(audio.release).toHaveBeenCalledWith(60);
   });
 
-  it('does not call attack/release when soundEnabled is false', () => {
+  it('does not attack when soundEnabled is false, but still forwards note-off', () => {
     useAppStore.getState().setSoundEnabled(false);
     audio.attack.mockClear();
     audio.release.mockClear();
@@ -59,13 +61,86 @@ describe('useAppStore — audible input wiring', () => {
     useAppStore.getState().releaseVirtualKey(64);
 
     expect(audio.attack).not.toHaveBeenCalled();
-    expect(audio.release).not.toHaveBeenCalled();
+    expect(audio.release).toHaveBeenCalledWith(64);
   });
 
   it('turning sound off silences anything currently ringing', () => {
     useAppStore.getState().pressVirtualKey(67, 100);
     useAppStore.getState().setSoundEnabled(false);
     expect(audio.releaseAll).toHaveBeenCalledTimes(1);
+  });
+
+  it('recognition note events record and highlight without producing audio', () => {
+    useAppStore.setState({ recognitionState: 'listening', recognitionSource: 'microphone' });
+    const recognition = _getRecognitionForTests();
+
+    recognition.noteStartedForRecognition(60, 100, 'microphone', 0.25);
+    recognition.noteEndedForRecognition(60, 0.5);
+
+    expect(useAppStore.getState().recognitionNotes).toHaveLength(1);
+    expect(useAppStore.getState().recognitionActiveMidi).toEqual([]);
+    expect(audio.attack).not.toHaveBeenCalled();
+    expect(audio.release).not.toHaveBeenCalled();
+  });
+
+  it('routes MIDI recognition through the shared input listener exactly once', () => {
+    useAppStore.setState({ recognitionState: 'listening', recognitionSource: 'midi' });
+
+    useAppStore.getState().pressVirtualKey(60, 100);
+    useAppStore.getState().releaseVirtualKey(60);
+
+    expect(audio.attack).toHaveBeenCalledTimes(1);
+    expect(audio.release).toHaveBeenCalledTimes(1);
+    expect(useAppStore.getState().recognitionNotes).toHaveLength(1);
+  });
+
+  it('timestamps MIDI-recognised notes on the advancing recognition clock, not the stopped playback clock', async () => {
+    // Regression: routing MIDI recognition through the shared keyboard/MIDI
+    // adapters must NOT inherit their learner-clock timestamp. Playback is
+    // stopped during recognition, so that clock is pinned near 0 — every
+    // recognised note would collapse onto the same onset.
+    useAppStore.setState({ recognitionState: 'listening', recognitionSource: 'midi' });
+
+    useAppStore.getState().pressVirtualKey(60, 100);
+    useAppStore.getState().releaseVirtualKey(60);
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    useAppStore.getState().pressVirtualKey(62, 100);
+    useAppStore.getState().releaseVirtualKey(62);
+
+    const notes = useAppStore.getState().recognitionNotes;
+    expect(notes).toHaveLength(2);
+    // A later press in the same session has a later onset — under the bug both
+    // read back as the same near-zero playback time.
+    expect(notes[1]!.startTime).toBeGreaterThan(notes[0]!.startTime + 0.01);
+  });
+});
+
+describe('useAppStore — recognition/playback exclusion', () => {
+  it('stops reference playback and blocks play, restart, and practice while listening', async () => {
+    const { engine } = _getEnginesForTests();
+    const stopSpy = vi.spyOn(engine, 'stop').mockImplementation(() => {});
+    const playSpy = vi.spyOn(engine, 'play').mockResolvedValue();
+    const restartSpy = vi.spyOn(engine, 'restart');
+    const song = buildPerformance([{ midi: 60, startTime: 0, duration: 0.5 }], { name: 'listen-ref', source: 'midi-file' });
+    useAppStore.setState({ song, mode: 'play-along', recognitionState: 'idle' });
+
+    const start = useAppStore.getState().startRecognition('midi');
+    await start;
+    expect(useAppStore.getState().recognitionState).toBe('listening');
+    expect(stopSpy).toHaveBeenCalled();
+
+    await useAppStore.getState().play();
+    useAppStore.getState().restart();
+    useAppStore.getState().startAttempt();
+
+    expect(playSpy).not.toHaveBeenCalled();
+    expect(restartSpy).not.toHaveBeenCalled();
+    expect(useAppStore.getState().isAttemptRunning).toBe(false);
+
+    await useAppStore.getState().stopRecognition();
+    stopSpy.mockRestore();
+    playSpy.mockRestore();
+    restartSpy.mockRestore();
   });
 });
 

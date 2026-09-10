@@ -28,6 +28,7 @@ const ctrl = vi.hoisted(() => ({
   sampleRate: 16000,
   audio: new Float32Array(0) as Float32Array,
   notes: [] as Array<{ midi: number; startTime: number; duration: number; confidence: number }>,
+  initPromise: null as Promise<void> | null,
 }));
 
 vi.mock('@/recognition', () => {
@@ -57,7 +58,9 @@ vi.mock('@/recognition', () => {
     clearBuffer(): void {}
   }
   class PitchyRecognizer {
-    async initialize(): Promise<void> {}
+    async initialize(): Promise<void> {
+      await ctrl.initPromise;
+    }
     async process(_audio: Float32Array, _sampleRate: number): Promise<ScriptedNote[]> {
       return ctrl.notes.map((n) => ({ ...n }));
     }
@@ -93,6 +96,7 @@ describe('MicrophoneAdapter — one session clock for every note boundary', () =
     ctrl.sampleRate = 16000;
     ctrl.audio = new Float32Array(0);
     ctrl.notes = [];
+    ctrl.initPromise = Promise.resolve();
     now = 0;
     adapter = new MicrophoneAdapter({ clock });
     starts = [];
@@ -189,5 +193,18 @@ describe('MicrophoneAdapter — one session clock for every note boundary', () =
     });
     // The late onsets are the real session time, not clamped near the 20s cap.
     expect(onsets.at(-1)!).toBeGreaterThan(25);
+  });
+
+  it('does not revive capture when Stop cancels initialization', async () => {
+    let resolveInitialization!: () => void;
+    ctrl.initPromise = new Promise<void>((resolve) => { resolveInitialization = resolve; });
+
+    const connecting = adapter.connect();
+    await Promise.resolve();
+    await adapter.disconnect();
+    resolveInitialization();
+    await connecting;
+
+    expect(adapter.status).toBe('disconnected');
   });
 });
