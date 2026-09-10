@@ -36,6 +36,8 @@ export class MicrophoneAdapter implements NoteInputAdapter {
   private recognizer: PitchyRecognizer | null = null;
   private active: ActiveNote | null = null;
   private pollHandle: number | null = null;
+  /** Invalidates an in-flight connect so a late permission/model result cannot revive capture. */
+  private connectionGeneration = 0;
 
   constructor(options: MicrophoneAdapterOptions = {}) {
     this.clock = options.clock ?? (() => performance.now() / 1000);
@@ -44,11 +46,14 @@ export class MicrophoneAdapter implements NoteInputAdapter {
 
   async connect(): Promise<void> {
     if (this.status === 'connected' || this.status === 'connecting') return;
+    const generation = ++this.connectionGeneration;
     this.setStatus('connecting');
+    let capture: MicrophoneCapture | null = null;
     try {
       const recognizer = new PitchyRecognizer();
       await recognizer.initialize();
-      const capture = new MicrophoneCapture({
+      if (generation !== this.connectionGeneration) return;
+      capture = new MicrophoneCapture({
         maxBufferSeconds: 20,
         onLevel: this.onLevel,
         onStatusChange: (status, error) => {
@@ -57,20 +62,27 @@ export class MicrophoneAdapter implements NoteInputAdapter {
       });
       this.capture = capture;
       await capture.start();
+      if (generation !== this.connectionGeneration) {
+        await capture.stop().catch(() => undefined);
+        if (this.capture === capture) this.capture = null;
+        return;
+      }
       this.recognizer = recognizer;
       this.active = null;
       this.setStatus('connected');
       this.pollHandle = window.setInterval(() => void this.poll(), POLL_MS);
     } catch (error) {
-      await this.capture?.stop().catch(() => undefined);
-      this.capture = null;
+      await capture?.stop().catch(() => undefined);
+      if (this.capture === capture) this.capture = null;
       this.recognizer = null;
+      if (generation !== this.connectionGeneration) return;
       this.setStatus('error', error instanceof MicrophoneCaptureError ? error : undefined);
       throw error;
     }
   }
 
   async disconnect(): Promise<void> {
+    this.connectionGeneration += 1;
     if (this.pollHandle !== null) window.clearInterval(this.pollHandle);
     this.pollHandle = null;
     const now = this.clock();
@@ -117,6 +129,7 @@ export class MicrophoneAdapter implements NoteInputAdapter {
     const windowSeconds = audioWindow.length / buffer.sampleRate;
     try {
       const notes = await recognizer.process(audioWindow, buffer.sampleRate);
+      if (capture !== this.capture || recognizer !== this.recognizer || this.status !== 'connected') return;
       const latest = notes.at(-1);
       const nowSec = this.clock();
       if (!latest) {

@@ -103,14 +103,27 @@ describe('SampledInstrument — sampled path', () => {
     expect(mocks.pianoStop).not.toHaveBeenCalled();
   });
 
-  it('collapses two near-simultaneous attacks on the same pitch into one voice', async () => {
+  it('allows a fast repeated attack on the same pitch', async () => {
     const inst = new SampledInstrument();
     inst.prepare();
     await flush();
 
-    inst.attack(60, 100); // pressVirtualKey
-    inst.attack(60, 100); // synchronous handleLearnerNoteOn for the same press
-    expect(mocks.pianoStart).toHaveBeenCalledTimes(1);
+    inst.attack(60, 100);
+    inst.attack(60, 100);
+    expect(mocks.pianoStart).toHaveBeenCalledTimes(2);
+  });
+
+  it('stops reference voices without stopping held input voices', async () => {
+    const inst = new SampledInstrument();
+    inst.prepare();
+    await flush();
+
+    inst.attack(60, 100);
+    inst.attack(64, 100, 1, 2, 'reference');
+    inst.releaseReferenceVoices();
+
+    expect(mocks.pianoStop).toHaveBeenCalledTimes(1);
+    expect(mocks.pianoStopAll).not.toHaveBeenCalled();
   });
 
   it('releaseAll silences ringing voices and the sampled player', async () => {

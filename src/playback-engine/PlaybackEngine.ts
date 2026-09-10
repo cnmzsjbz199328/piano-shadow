@@ -60,6 +60,8 @@ export class PlaybackEngine {
   private endTimeoutId: ReturnType<typeof setTimeout> | null = null;
   private rafId: number | null = null;
   private disposed = false;
+  /** Invalidates a play that is waiting for Tone.start() to resolve. */
+  private playRequestId = 0;
 
   constructor(private readonly options: PlaybackEngineOptions = {}) {}
 
@@ -122,7 +124,9 @@ export class PlaybackEngine {
 
   async play(): Promise<void> {
     if (!this.currentPerformance || this.disposed) return;
+    const requestId = ++this.playRequestId;
     await Tone.start();
+    if (requestId !== this.playRequestId || !this.currentPerformance || this.disposed) return;
     this.ensureSynths();
 
     if (this.state === 'paused') {
@@ -144,12 +148,14 @@ export class PlaybackEngine {
 
   pause(): void {
     if (this.state !== 'playing' && this.state !== 'counting-in') return;
+    this.playRequestId += 1;
     Tone.getTransport().pause();
     this.stopTicking();
     this.setState('paused');
   }
 
   stop(): void {
+    this.playRequestId += 1;
     Tone.getTransport().stop();
     this.cancelAllScheduled();
     this.stopTicking();
@@ -245,7 +251,7 @@ export class PlaybackEngine {
       // Same clamped `voiceSeconds` and same `time` the old synth call took —
       // the instrument self-releases the voice after `voiceSeconds` (no separate
       // scheduled note-off), preserving the single-clock schedule.
-      instrument.attack(note.midi, note.velocity ?? 100, time, voiceSeconds);
+      instrument.attack(note.midi, note.velocity ?? 100, time, voiceSeconds, 'reference');
       Tone.getDraw().schedule(() => this.options.onReferenceNoteStart?.(note), time);
       Tone.getDraw().schedule(() => this.options.onReferenceNoteEnd?.(note), time + voiceSeconds);
     }, t);
@@ -298,6 +304,9 @@ export class PlaybackEngine {
   }
 
   private cancelAllScheduled(): void {
+    // Clearing Transport events only prevents future notes. Notes whose
+    // callbacks already fired need their own ownership-aware stop path.
+    instrument.releaseReferenceVoices();
     for (const id of this.scheduledNoteIds) Tone.getTransport().clear(id);
     for (const id of this.scheduledClickIds) Tone.getTransport().clear(id);
     if (this.endEventId !== null) Tone.getTransport().clear(this.endEventId);

@@ -171,6 +171,7 @@ let microphoneAdapter: MicrophoneAdapter | null = null;
 let recognitionClockStart = 0;
 let recognitionTimer: number | null = null;
 let recognitionUnsubscribers: Array<() => void> = [];
+let recognitionSessionId = 0;
 const recognitionPending = new Map<number, Array<{ startTime: number; velocity?: number }>>();
 let recognitionRawNotes: Array<{ midi: number; startTime: number; duration: number; velocity?: number }> = [];
 
@@ -190,6 +191,14 @@ function recognitionTime(): number {
   return Math.max(0, (performance.now() - recognitionClockStart) / 1000);
 }
 
+function isRecognitionActive(state = useAppStore.getState()): boolean {
+  return state.recognitionState === 'initializing' || state.recognitionState === 'listening';
+}
+
+function canStartPlayback(state = useAppStore.getState()): boolean {
+  return !isRecognitionActive(state);
+}
+
 function clearRecognitionListeners(): void {
   for (const unsubscribe of recognitionUnsubscribers) unsubscribe();
   recognitionUnsubscribers = [];
@@ -199,22 +208,20 @@ function clearRecognitionListeners(): void {
 }
 
 /**
- * Make a note-on / note-off audible through the shared sampled instrument
- * (audio-engine). Every audible-input path (on-screen keyboard, live Web MIDI,
- * recognised notes) funnels through these two so the `soundEnabled` gate lives
- * in exactly one place. Turning sound off also calls `instrument.releaseAll()`
- * (see `setSoundEnabled`), so a note held across the toggle can't stick even
- * though `audibleRelease` is gated too.
+ * Make learner input audible through the shared sampled instrument. Recognition
+ * events themselves never call these functions; the global keyboard/MIDI route
+ * decides whether input audio is allowed for the current recognition source.
  */
 function audibleAttack(midi: number, velocity?: number): void {
   if (useAppStore.getState().soundEnabled) instrument.attack(midi, velocity);
 }
 function audibleRelease(midi: number): void {
-  if (useAppStore.getState().soundEnabled) instrument.release(midi);
+  // Releases must still be delivered when sound is toggled or recognition has
+  // just ended; otherwise a note held across a state transition can stick.
+  instrument.release(midi);
 }
 
 function noteStartedForRecognition(midi: number, velocity?: number, source: 'microphone' | 'midi-device' | 'virtual-keyboard' = 'microphone', time = recognitionTime()): void {
-  audibleAttack(midi, velocity);
   const stack = recognitionPending.get(midi) ?? [];
   stack.push({ startTime: time, velocity });
   recognitionPending.set(midi, stack);
@@ -233,7 +240,6 @@ function noteStartedForRecognition(midi: number, velocity?: number, source: 'mic
 }
 
 function noteEndedForRecognition(midi: number, time = recognitionTime()): void {
-  audibleRelease(midi);
   const stack = recognitionPending.get(midi);
   const open = stack?.shift();
   if (open) {
@@ -253,16 +259,26 @@ function pushDebugMidiEvent(label: string): void {
   useAppStore.setState((s) => ({ debug: { ...s.debug, lastMidiEvent: label } }));
 }
 
-function handleLearnerNoteOn(midi: number, velocity: number | undefined, label: string): void {
+function handleLearnerNoteOn(midi: number, velocity: number | undefined, label: string, source: 'midi-device' | 'virtual-keyboard'): void {
   pushDebugMidiEvent(label);
-  audibleAttack(midi, velocity);
+  const state = useAppStore.getState();
+  const recognitionMidi = isRecognitionActive(state) && state.recognitionSource === 'midi';
+  const recognitionMicrophone = isRecognitionActive(state) && state.recognitionSource === 'microphone';
+  if (recognitionMidi) {
+    // Recognition timestamps must come from the recognition session clock
+    // (`recognitionTime()`, the `noteStartedForRecognition` default), NOT the
+    // shared learner clock these adapters carry — playback is stopped during
+    // recognition, so `learnerClock()` sits at ~0 and would collapse every
+    // recognised note onto startTime 0.
+    noteStartedForRecognition(midi, velocity, source);
+  }
+  if (!recognitionMicrophone) audibleAttack(midi, velocity);
   useAppStore.setState((s) => ({ learnerActiveMidi: [...new Set([...s.learnerActiveMidi, midi])] }));
 
-  const state = useAppStore.getState();
   if (state.mode === 'wait' && state.waitingForMidi?.includes(midi)) {
     const remaining = state.waitingForMidi.filter((m) => m !== midi);
     useAppStore.setState({ waitingForMidi: remaining.length > 0 ? remaining : null });
-    if (remaining.length === 0) void engine.play();
+    if (remaining.length === 0 && canStartPlayback()) void engine.play();
   }
 
   if (state.isAttemptRunning && liveMatcher) {
@@ -283,6 +299,9 @@ function handleLearnerNoteOn(midi: number, velocity: number | undefined, label: 
 }
 
 function handleLearnerNoteOff(midi: number): void {
+  const state = useAppStore.getState();
+  // As in `handleLearnerNoteOn`: let recognition use its own session clock.
+  if (isRecognitionActive(state) && state.recognitionSource === 'midi') noteEndedForRecognition(midi);
   audibleRelease(midi);
   useAppStore.setState((s) => ({ learnerActiveMidi: s.learnerActiveMidi.filter((m) => m !== midi) }));
 }
@@ -299,9 +318,9 @@ function handleReferenceNoteStart(note: NoteEvent): void {
   }
 }
 
-keyboardAdapter.onNoteStart((n) => handleLearnerNoteOn(n.midi, n.velocity, `keyboard note-on ${n.midi} v${n.velocity ?? '-'}`));
+keyboardAdapter.onNoteStart((n) => handleLearnerNoteOn(n.midi, n.velocity, `keyboard note-on ${n.midi} v${n.velocity ?? '-'}`, 'virtual-keyboard'));
 keyboardAdapter.onNoteEnd((n) => handleLearnerNoteOff(n.midi));
-midiAdapter.onNoteStart((n) => handleLearnerNoteOn(n.midi, n.velocity, `midi note-on ${n.midi} v${n.velocity ?? '-'}`));
+midiAdapter.onNoteStart((n) => handleLearnerNoteOn(n.midi, n.velocity, `midi note-on ${n.midi} v${n.velocity ?? '-'}`, 'midi-device'));
 midiAdapter.onNoteEnd((n) => handleLearnerNoteOff(n.midi));
 midiAdapter.onStatusChange((status) => useAppStore.setState({ midiStatus: status }));
 
@@ -458,11 +477,12 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   setMode(mode) {
-    if (get().isAttemptRunning) return;
+    if (get().isAttemptRunning || isRecognitionActive(get())) return;
     set({ mode, waitingForMidi: null });
   },
 
   async play() {
+    if (!canStartPlayback()) return;
     await engine.play();
   },
   pause() {
@@ -473,6 +493,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ waitingForMidi: null });
   },
   restart() {
+    if (!canStartPlayback()) return;
     engine.restart();
     set({ waitingForMidi: null });
   },
@@ -544,20 +565,16 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   pressVirtualKey(midi, velocity) {
-    // Sound the note here for immediacy; the adapter's `handleLearnerNoteOn`
-    // reaches `audibleAttack` again synchronously — the instrument dedups the
-    // duplicate (same pitch within a few ms) into a single voice.
-    audibleAttack(midi, velocity);
+    // The adapter event is the single input-to-audio/recording dispatch path.
     keyboardAdapter.press(midi, velocity);
   },
   releaseVirtualKey(midi) {
-    audibleRelease(midi);
     keyboardAdapter.release(midi);
   },
 
   startAttempt() {
     const { song, mode, selectedMidiInputId, practiceVoice } = get();
-    if (!song || mode === 'listen') return;
+    if (!song || mode === 'listen' || isRecognitionActive(get())) return;
     const source = selectedMidiInputId && midiAdapter.status === 'connected' ? 'midi-device' : 'virtual-keyboard';
     recorder = new PerformanceRecorder(source);
     recorder.attach(keyboardAdapter);
@@ -593,10 +610,21 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   async startRecognition(source = 'microphone') {
     if (get().recognitionState === 'initializing' || get().recognitionState === 'listening') return;
+    const sessionId = ++recognitionSessionId;
     clearRecognitionListeners();
     recognitionRawNotes = [];
     recognitionClockStart = performance.now();
-    set({ recognitionState: 'initializing', recognitionSource: source, recognitionNotes: [], recognitionActiveMidi: [], recognitionElapsed: 0, recognitionError: null, importError: null });
+    set({ recognitionState: 'initializing', recognitionSource: source, recognitionNotes: [], recognitionActiveMidi: [], recognitionElapsed: 0, recognitionError: null, importError: null, waitingForMidi: null });
+
+    // Stop reference playback immediately. If an attempt is active, preserve
+    // its current timestamp while sending it through the normal finish/persist
+    // path below rather than leaving a reference voice playing during setup.
+    const attemptTime = engine.getCurrentTime();
+    engine.stop();
+    instrument.releaseAll();
+    keyboardAdapter.releaseAll();
+    if (get().isAttemptRunning) await get().finishAttempt(attemptTime);
+    if (sessionId !== recognitionSessionId) return;
 
     const connect = async () => {
       if (source === 'microphone') {
@@ -605,29 +633,37 @@ export const useAppStore = create<AppState>((set, get) => ({
         // (Bug 2: onsets were buffer-relative, offsets were performance.now()).
         microphoneAdapter = new MicrophoneAdapter({ onLevel: (rms) => set({ recognitionLevel: rms }), clock: () => recognitionTime() });
         recognitionUnsubscribers.push(microphoneAdapter.onStatusChange((status) => {
+          if (sessionId !== recognitionSessionId) return;
           if (status === 'error') set({ recognitionError: 'The microphone was disconnected or lost during capture.' });
         }));
-        recognitionUnsubscribers.push(microphoneAdapter.onNoteStart((n) => noteStartedForRecognition(n.midi, n.velocity, 'microphone', n.time)));
-        recognitionUnsubscribers.push(microphoneAdapter.onNoteEnd((n) => noteEndedForRecognition(n.midi, n.time)));
+        recognitionUnsubscribers.push(microphoneAdapter.onNoteStart((n) => {
+          if (sessionId === recognitionSessionId) noteStartedForRecognition(n.midi, n.velocity, 'microphone', n.time);
+        }));
+        recognitionUnsubscribers.push(microphoneAdapter.onNoteEnd((n) => {
+          if (sessionId === recognitionSessionId) noteEndedForRecognition(n.midi, n.time);
+        }));
         await microphoneAdapter.connect();
       } else {
         await midiAdapter.connect();
+        if (sessionId !== recognitionSessionId) return;
         const inputs = midiAdapter.listInputs();
         const preferred = get().selectedMidiInputId;
         if (preferred && inputs.some((input) => input.id === preferred)) midiAdapter.selectInput(preferred);
         else if (inputs[0]) midiAdapter.selectInput(inputs[0].id);
-        recognitionUnsubscribers.push(keyboardAdapter.onNoteStart((n) => noteStartedForRecognition(n.midi, n.velocity, 'virtual-keyboard')));
-        recognitionUnsubscribers.push(keyboardAdapter.onNoteEnd((n) => noteEndedForRecognition(n.midi)));
-        recognitionUnsubscribers.push(midiAdapter.onNoteStart((n) => noteStartedForRecognition(n.midi, n.velocity, 'midi-device')));
-        recognitionUnsubscribers.push(midiAdapter.onNoteEnd((n) => noteEndedForRecognition(n.midi)));
       }
     };
 
     try {
       await connect();
+      if (sessionId !== recognitionSessionId) {
+        await microphoneAdapter?.disconnect().catch(() => undefined);
+        microphoneAdapter = null;
+        return;
+      }
       set({ recognitionState: 'listening' });
       recognitionTimer = window.setInterval(() => set({ recognitionElapsed: recognitionTime() }), 100);
     } catch (err) {
+      if (sessionId !== recognitionSessionId) return;
       clearRecognitionListeners();
       await microphoneAdapter?.disconnect().catch(() => undefined);
       microphoneAdapter = null;
@@ -636,19 +672,37 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   async stopRecognition() {
-    if (get().recognitionState !== 'listening') return;
+    const currentState = get().recognitionState;
+    if (currentState !== 'initializing' && currentState !== 'listening') return;
+    if (currentState === 'initializing') {
+      // Invalidate first so a late permission/model result cannot revive this
+      // session after Stop has completed.
+      recognitionSessionId += 1;
+      const adapter = microphoneAdapter;
+      microphoneAdapter = null;
+      clearRecognitionListeners();
+      await adapter?.disconnect().catch(() => undefined);
+      instrument.releaseAll();
+      keyboardAdapter.releaseAll();
+      set({ recognitionState: 'stopped', recognitionActiveMidi: [], recognitionLevel: 0 });
+      return;
+    }
     const stopTime = recognitionTime();
     if (microphoneAdapter) await microphoneAdapter.disconnect();
     for (const midi of [...recognitionPending.keys()]) noteEndedForRecognition(midi, stopTime);
+    const rawNotes = [...recognitionRawNotes];
+    recognitionSessionId += 1;
     clearRecognitionListeners();
     microphoneAdapter = null;
+    instrument.releaseAll();
+    keyboardAdapter.releaseAll();
     const source = get().recognitionSource === 'midi' ? 'midi-device' : 'microphone';
-    if (recognitionRawNotes.length === 0) {
+    if (rawNotes.length === 0) {
       set({ recognitionState: 'error', recognitionError: 'No notes were detected. Play a clear single-note melody and try again.', recognitionActiveMidi: [], recognitionElapsed: stopTime });
       return;
     }
     const name = `Unnamed performance · ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
-    const performance = buildPerformance(recognitionRawNotes, { name, source, idPrefix: 'recognised' });
+    const performance = buildPerformance(rawNotes, { name, source, idPrefix: 'recognised' });
     const record = await persistence.saveSong(performance, false);
     loadSongIntoEngine(performance);
     set({ song: performance, songRecord: record, duration: performance.duration, currentTime: 0, lastResult: null, recognitionState: 'stopped', recognitionActiveMidi: [], recognitionElapsed: stopTime, recognitionLevel: 0 });
@@ -674,4 +728,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 
 export function _getEnginesForTests() {
   return { engine, keyboardAdapter, midiAdapter };
+}
+
+export function _getRecognitionForTests() {
+  return { noteStartedForRecognition, noteEndedForRecognition };
 }

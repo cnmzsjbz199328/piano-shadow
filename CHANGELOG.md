@@ -1,5 +1,40 @@
 # Changelog
 
+## v0.8.1 — Recognition no longer echoes or fights playback (2026-09-10)
+
+Live-testing fix. On the deployed v0.8.0, hitting **Listen** (microphone
+recognition) voiced every detected note through the sampled piano — the app
+"played along" with the take instead of only capturing it — and recognition
+shared audio voices, timers, and adapter callbacks with reference playback with
+no arbitration.
+
+- **Recognition is capture-only.** `noteStarted` / `noteEndedForRecognition` no
+  longer self-voice, and `handleLearnerNoteOn` suppresses input audio while a
+  microphone session is initializing or listening, so microphone **Listen**
+  produces no sound at all. Note-offs are still always delivered (spec §25).
+  MIDI-source **Listen** still monitors input audibly (a MIDI controller has no
+  sound of its own) and rides the shared learner-input path, timestamped on the
+  recognition session clock, not the stopped playback clock.
+- **Recognition and reference playback are mutually exclusive.** Starting
+  recognition stops playback and finishes any running attempt through the normal
+  persist path; Play / Restart / Start practice / mode tabs are disabled while a
+  session is initializing or listening; the wait-mode auto-resume is gated too.
+- **Async races guarded.** A slow `getUserMedia` / model init, or a `Tone.start()`
+  that resolves after Stop, can no longer revive a dead session
+  (`connectionGeneration` in `MicrophoneAdapter`, `playRequestId` in
+  `PlaybackEngine`, `recognitionSessionId` in the store). Reference-playback
+  voices get their own ownership group, so stopping playback never cuts a note
+  the learner is still holding.
+- Tests: reference-voice ownership (`instrument` + new `PlaybackEngine.test.ts`),
+  recognition/playback exclusion + session-clock timestamps (`useAppStore`),
+  init-cancel race (`MicrophoneAdapter`), and an E2E for the Listen→Stop cancel
+  path.
+
+**Known, not addressed here:** the Pitchy (McLeod Pitch Method) recogniser still
+drops a sustained note an octave (sometimes a fifth) onto a subharmonic — a
+documented recogniser limitation ([`doc/MICROPHONE_LAB_FINDINGS.md`](doc/MICROPHONE_LAB_FINDINGS.md)),
+left for the recognition round.
+
 ## v0.8.0 — Staff-notation view (2026-09-10)
 
 Wave 3 · Track F. Scope signed off in advance (`doc/ARCHITECTURE.md` →

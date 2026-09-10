@@ -5,8 +5,8 @@ import { midiToNoteName } from '@/music-model';
 /**
  * Audio engine (spec §13 stack, §25 quality rules).
  *
- * A single sampled-piano voice bank, shared by reference playback and every
- * audible learner input (on-screen keyboard, live Web MIDI, recognised notes).
+ * A single sampled-piano voice bank, shared by reference playback and audible
+ * learner input (on-screen keyboard and live Web MIDI).
  * It is deliberately its own module — a *peer* of `playback-engine` — imported
  * only from `stores` and `playback-engine`, never from a React component, so
  * sound generation stays out of the render tree (spec §25).
@@ -25,17 +25,7 @@ import { midiToNoteName } from '@/music-model';
  */
 
 type Mode = 'idle' | 'synth' | 'sampled' | 'silent';
-
-/**
- * Two attacks on the same pitch closer together than this are treated as one
- * voice. The on-screen keyboard reaches `attack` twice for a single press — once
- * from `pressVirtualKey`, then synchronously again from the keyboard adapter's
- * always-on `handleLearnerNoteOn` subscription (and, during MIDI-source
- * recognition, a third time from `noteStartedForRecognition`). Anything farther
- * apart than this is a genuine retrigger (a trill, a repeated note) and sounds
- * again. Audio-engine internal only — not a scoring/timing tolerance.
- */
-const RETRIGGER_DEDUP_SECONDS = 0.03;
+export type VoiceGroup = 'input' | 'reference';
 
 /**
  * Hard ceiling (real audio seconds) on any single voice this module starts,
@@ -57,10 +47,13 @@ export class SampledInstrument {
   private mode: Mode = 'idle';
   private piano: ReturnType<typeof SplendidGrandPiano> | null = null;
   private synth: Tone.PolySynth<Tone.Synth> | null = null;
+  private referenceSynth: Tone.PolySynth<Tone.Synth> | null = null;
   private prepared = false;
   private seq = 0;
   /** Release-ended ("open") voices only; keyed by MIDI → the newest live voice. */
   private readonly open = new Map<number, OpenVoice>();
+  /** Reference voices have different ownership from learner input voices. */
+  private readonly referenceVoices = new Set<OpenVoice>();
 
   /**
    * Create the fallback synth now and kick off the async sample download.
@@ -76,6 +69,9 @@ export class SampledInstrument {
 
       // Fallback first, so the very first note sounds even mid-download.
       this.synth = new Tone.PolySynth(Tone.Synth, {
+        envelope: { attack: 0.005, decay: 0.15, sustain: 0.25, release: 0.3 },
+      }).toDestination();
+      this.referenceSynth = new Tone.PolySynth(Tone.Synth, {
         envelope: { attack: 0.005, decay: 0.15, sustain: 0.25, release: 0.3 },
       }).toDestination();
       this.mode = 'synth';
@@ -127,26 +123,39 @@ export class SampledInstrument {
    *   (the reference-playback path passes the clamped `voiceSeconds`). When
    *   omitted, the note rings until `release(midi)` — used for live input.
    */
-  attack(midi: number, velocity = 100, when?: number, durationSeconds?: number): void {
+  attack(midi: number, velocity = 100, when?: number, durationSeconds?: number, group: VoiceGroup = 'input'): (() => void) | undefined {
     try {
       if (!this.prepared) this.prepare();
-      if (this.mode === 'silent') return;
+      if (this.mode === 'silent') return undefined;
 
       const at = when ?? this.now();
       const vel = clamp(Math.round(velocity), 1, 127);
 
+      if (group === 'reference') {
+        const voice: OpenVoice = {
+          stop: this.startVoice(midi, vel, when, durationSeconds, group),
+          startedAt: at,
+        };
+        this.referenceVoices.add(voice);
+        return (stopWhen?: number) => {
+          if (!this.referenceVoices.delete(voice)) return;
+          voice.stop(stopWhen);
+        };
+      }
+
       if (durationSeconds === undefined) {
         const existing = this.open.get(midi);
-        if (existing && at - existing.startedAt < RETRIGGER_DEDUP_SECONDS) return; // duplicate
         if (existing) existing.stop(at); // retrigger: steal the ringing voice
-        const stop = this.startVoice(midi, vel, when, undefined);
+        const stop = this.startVoice(midi, vel, when, undefined, group);
         this.open.set(midi, { stop, startedAt: at });
       } else {
         const dur = clamp(durationSeconds, 0.05, MAX_VOICE_SECONDS);
-        this.startVoice(midi, vel, when, dur);
+        this.startVoice(midi, vel, when, dur, group);
       }
+      return undefined;
     } catch {
       // Graceful degradation: a sound source must never break the caller.
+      return undefined;
     }
   }
 
@@ -171,6 +180,7 @@ export class SampledInstrument {
       /* ignore */
     }
     this.open.clear();
+    this.releaseReferenceVoices();
     try {
       this.piano?.stop();
     } catch {
@@ -178,6 +188,21 @@ export class SampledInstrument {
     }
     try {
       this.synth?.releaseAll();
+    } catch {
+      /* ignore */
+    }
+  }
+
+  /** Stop only voices started by reference playback, preserving held input notes. */
+  releaseReferenceVoices(): void {
+    try {
+      for (const voice of this.referenceVoices) voice.stop();
+    } catch {
+      /* ignore */
+    }
+    this.referenceVoices.clear();
+    try {
+      this.referenceSynth?.releaseAll();
     } catch {
       /* ignore */
     }
@@ -191,7 +216,13 @@ export class SampledInstrument {
     } catch {
       /* ignore */
     }
+    try {
+      this.referenceSynth?.dispose();
+    } catch {
+      /* ignore */
+    }
     this.synth = null;
+    this.referenceSynth = null;
     this.mode = 'silent';
   }
 
@@ -224,6 +255,7 @@ export class SampledInstrument {
     velocity: number,
     when: number | undefined,
     durationSeconds: number | undefined,
+    group: VoiceGroup,
   ): (when?: number) => void {
     if (this.mode === 'sampled' && this.piano) {
       const stopFn = this.piano.start({
@@ -242,19 +274,20 @@ export class SampledInstrument {
       };
     }
 
-    if (this.synth) {
+    const synth = group === 'reference' ? this.referenceSynth : this.synth;
+    if (synth) {
       const noteName = midiToNoteName(midi);
       const gain = clamp(velocity / 127, 0.05, 1);
       if (durationSeconds !== undefined) {
-        this.synth.triggerAttackRelease(noteName, durationSeconds, when, gain);
+        synth.triggerAttackRelease(noteName, durationSeconds, when, gain);
         return () => {
           /* self-releasing */
         };
       }
-      this.synth.triggerAttack(noteName, when, gain);
+      synth.triggerAttack(noteName, when, gain);
       return (t?: number) => {
         try {
-          this.synth?.triggerRelease(noteName, t);
+          synth.triggerRelease(noteName, t);
         } catch {
           /* ignore */
         }
