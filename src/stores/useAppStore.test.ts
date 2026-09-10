@@ -1,9 +1,14 @@
+import 'fake-indexeddb/auto';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 /**
  * Wave 2 / Track B: every audible-input path in the store funnels note-on /
  * note-off through the shared `audio-engine` instrument, gated by `soundEnabled`.
  * The audio-engine module is mocked so nothing touches Web Audio here.
+ *
+ * Wave 3 / Track E appends the per-hand practice case at the bottom; it wraps
+ * `evaluatePerformance` in a spy (real implementation) so it can assert which
+ * reference notes the store passed in.
  */
 
 const audio = vi.hoisted(() => ({
@@ -16,7 +21,15 @@ const audio = vi.hoisted(() => ({
 
 vi.mock('@/audio-engine', () => ({ instrument: audio, SampledInstrument: class {} }));
 
-import { useAppStore } from './useAppStore';
+vi.mock('@/practice-engine', async (importOriginal) => {
+  const actual = await importOriginal<typeof PracticeEngineModule>();
+  return { ...actual, evaluatePerformance: vi.fn(actual.evaluatePerformance) };
+});
+
+import type * as PracticeEngineModule from '@/practice-engine';
+import { useAppStore, _getEnginesForTests } from './useAppStore';
+import { evaluatePerformance } from '@/practice-engine';
+import { buildPerformance, inferHands } from '@/music-model';
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -52,5 +65,48 @@ describe('useAppStore — audible input wiring', () => {
     useAppStore.getState().pressVirtualKey(67, 100);
     useAppStore.getState().setSoundEnabled(false);
     expect(audio.releaseAll).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('useAppStore — per-hand practice (Track E)', () => {
+  beforeEach(() => {
+    useAppStore.setState({ song: null, practiceVoice: 'both', isAttemptRunning: false, mode: 'play-along' });
+  });
+
+  it('setPracticeVoice("left") makes a scored attempt evaluate only the left-hand reference', async () => {
+    // Tone's transport is a stub under jsdom, so `engine.load` (called by
+    // setPracticeVoice) can't touch the real transport — no-op it and assert the
+    // filtered song it receives instead.
+    const { engine } = _getEnginesForTests();
+    const loadSpy = vi.spyOn(engine, 'load').mockImplementation(() => {});
+
+    const song = buildPerformance(
+      [
+        { midi: 48, startTime: 0, duration: 0.4 }, // C3 → left
+        { midi: 50, startTime: 1.0, duration: 0.4 }, // D3 → left
+        { midi: 72, startTime: 0.5, duration: 0.4 }, // C5 → right
+        { midi: 74, startTime: 1.5, duration: 0.4 }, // D5 → right
+      ],
+      { name: 'Two hands', source: 'midi-file', idPrefix: 'ref' },
+    );
+    song.notes = inferHands(song.notes);
+    expect(new Set(song.notes.map((n) => n.hand))).toEqual(new Set(['left', 'right']));
+
+    useAppStore.setState({ song });
+    useAppStore.getState().setPracticeVoice('left');
+    expect(useAppStore.getState().practiceVoice).toBe('left');
+
+    // setPracticeVoice re-loads the engine with only the chosen hand's notes.
+    const reloaded = loadSpy.mock.calls.at(-1)![0];
+    expect(reloaded.notes.map((n) => n.midi)).toEqual([48, 50]);
+
+    useAppStore.getState().startAttempt();
+    await useAppStore.getState().finishAttempt(2);
+
+    const referenceArg = vi.mocked(evaluatePerformance).mock.calls.at(-1)![0];
+    expect(referenceArg.map((n) => n.midi)).toEqual([48, 50]);
+    expect(referenceArg.every((n) => n.hand === 'left')).toBe(true);
+
+    loadSpy.mockRestore();
   });
 });
