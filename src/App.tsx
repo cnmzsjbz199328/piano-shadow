@@ -20,9 +20,8 @@ export default function App() {
   return (
     <div className="app-shell">
       <nav className="app-nav">
-        <NavLink to="/" className="app-nav__brand">
+        <NavLink to="/" className="app-nav__brand" aria-label="Piano Shadow">
           <span className="app-nav__brand-mark" aria-hidden>♬</span>
-          Piano Shadow
         </NavLink>
         <div className="app-nav__actions">
           <OverflowMenu label="Settings">

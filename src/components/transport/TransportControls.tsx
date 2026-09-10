@@ -63,7 +63,6 @@ export function TransportControls({ surface, onSurfaceChange, surfaceSwitchDisab
     <div className="song-transport">
       <div className="practice-header">
         <div className="practice-header__id">
-          <span className="section-heading__eyebrow">Current reference</span>
           <h2 className="practice-header__title" title={song?.name}>{song?.name ?? 'No reference loaded'}</h2>
         </div>
         <div className="practice-header__transport">
