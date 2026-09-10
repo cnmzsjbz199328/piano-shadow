@@ -1,9 +1,10 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useAppStore } from '@/stores/useAppStore';
 import { midiToNoteName } from '@/music-model';
 import { TransportControls } from '@/components/transport/TransportControls';
 import { PianoKeyboard } from '@/components/piano/PianoKeyboard';
 import { FallingNotes } from '@/components/piano-roll/FallingNotes';
+import { ScoreView } from '@/components/sheet-music/ScoreView';
 import { PracticeEmptyState } from '@/components/practice/PracticeEmptyState';
 import { RecognitionControls } from '@/components/practice/RecognitionControls';
 import { SongLibrary } from '@/components/practice/SongLibrary';
@@ -43,6 +44,7 @@ export function PracticePage() {
   const releaseVirtualKey = useAppStore((s) => s.releaseVirtualKey);
   const isPlaying = transportState === 'playing' || transportState === 'counting-in';
   const importError = useAppStore((s) => s.importError);
+  const [notationOpen, setNotationOpen] = useState(false);
 
   const activeReferenceMidi = useMemo(() => {
     if (!song || !isPlaying) return [];
@@ -84,6 +86,16 @@ export function PracticePage() {
           onRelease={releaseVirtualKey}
         />
       </div>
+
+      {song && (
+        <details
+          className="notation-panel"
+          onToggle={(e) => setNotationOpen((e.currentTarget as HTMLDetailsElement).open)}
+        >
+          <summary>Show notation</summary>
+          {notationOpen && <ScoreView />}
+        </details>
+      )}
 
       {song && (
         <>

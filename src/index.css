@@ -1774,3 +1774,57 @@ select {
   border-radius: var(--radius-sm) var(--radius-sm) 0 0;
   background: var(--bg-elevated-2);
 }
+
+/* --- staff-notation view (Track F · v0.8.0) — secondary, opt-in surface --- */
+
+.notation-panel {
+  border-top: 1px solid var(--border-subtle);
+  margin-top: var(--space-3);
+}
+.notation-panel > summary {
+  padding: 0.6rem 0.15rem;
+  cursor: pointer;
+  list-style: none;
+  color: var(--text-dim);
+  font-size: var(--text-sm);
+}
+.notation-panel > summary::-webkit-details-marker {
+  display: none;
+}
+.notation-panel > summary::before {
+  content: '▸ ';
+  color: var(--text-faint);
+}
+.notation-panel[open] > summary::before {
+  content: '▾ ';
+}
+.notation-panel > summary:hover {
+  color: var(--text);
+}
+
+.score-view {
+  margin: var(--space-2) 0 var(--space-4);
+  padding: var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+  background: var(--bg-elevated);
+  color: var(--text);
+}
+.score-view--empty p,
+.score-view__fallback {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: var(--text-sm);
+}
+.score-view__note {
+  margin: var(--space-2) 0 0;
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+}
+.score-view__host {
+  width: 100%;
+  overflow-x: auto;
+}
+.score-view__host svg {
+  display: block;
+}
