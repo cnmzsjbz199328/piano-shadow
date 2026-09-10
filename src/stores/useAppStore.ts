@@ -67,6 +67,9 @@ interface AppState {
 
   // settings + debug
   settings: SettingsRecord;
+  /** UI mirror of `settings.inputLatencyMs`. The offset itself is applied at the
+   *  module-level `learnerClock` (spec §6) — this is just for the control. */
+  inputLatencyMs: number;
   showDebugPanel: boolean;
   debug: DebugSnapshot;
 
@@ -94,6 +97,7 @@ interface AppState {
   setCountInEnabled(on: boolean): void;
   setShowDebugPanel(on: boolean): void;
   setSoundEnabled(on: boolean): void;
+  setInputLatencyMs(ms: number): void;
 
   connectMidi(): Promise<void>;
   selectMidiInput(id: string | null): void;
@@ -137,8 +141,20 @@ const engine = new PlaybackEngine({
   },
 });
 
-const keyboardAdapter = new VirtualKeyboardAdapter(() => engine.getCurrentTime());
-const midiAdapter = new WebMidiAdapter(() => engine.getCurrentTime());
+/**
+ * Fixed input-latency compensation, in milliseconds (spec §6, §25). A positive
+ * value means the learner's note-ons physically register late (device / OS /
+ * audio-scan latency), so we shift every recorded learner onset *earlier* by
+ * this amount — correcting an on-time performance back to on-time. It is applied
+ * in exactly ONE place: the shared learner clock the input adapters timestamp
+ * against. This is a scalar offset on the single authoritative clock, not a new
+ * timer. Loaded from settings in `init()`, changed via `setInputLatencyMs`.
+ */
+let inputLatencyMs = 0;
+const learnerClock = () => engine.getCurrentTime() - inputLatencyMs / 1000;
+
+const keyboardAdapter = new VirtualKeyboardAdapter(learnerClock);
+const midiAdapter = new WebMidiAdapter(learnerClock);
 let recorder: PerformanceRecorder | null = null;
 let liveMatcher: LiveMatcher | null = null;
 let microphoneAdapter: MicrophoneAdapter | null = null;
@@ -155,6 +171,10 @@ let recognitionRawNotes: Array<{ midi: number; startTime: number; duration: numb
  * auto-stop (Bug 2). Clamped alongside the live session elapsed time.
  */
 const MAX_RECOGNISED_NOTE_SECONDS = 12;
+
+/** Sane bounds for the user-set input-latency compensation (ms). */
+const INPUT_LATENCY_MIN_MS = -200;
+const INPUT_LATENCY_MAX_MS = 500;
 
 function recognitionTime(): number {
   return Math.max(0, (performance.now() - recognitionClockStart) / 1000);
@@ -307,6 +327,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   midiError: null,
 
   settings: persistence.DEFAULT_SETTINGS,
+  inputLatencyMs: persistence.DEFAULT_SETTINGS.inputLatencyMs,
   showDebugPanel: false,
   debug: { playheadTime: 0, lastMidiEvent: null, lastMatchingDecisions: [] },
   soundEnabled: true,
@@ -329,7 +350,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       countInEnabled: settings.countInEnabled,
       selectedMidiInputId: settings.lastMidiInputId,
       showDebugPanel: settings.showDebugPanel,
+      inputLatencyMs: settings.inputLatencyMs,
     });
+    inputLatencyMs = settings.inputLatencyMs; // feed the shared learnerClock offset
     engine.setTempoScale(settings.tempoScale);
     engine.setMetronomeEnabled(settings.metronomeEnabled);
     engine.setCountInEnabled(settings.countInEnabled);
@@ -443,6 +466,13 @@ export const useAppStore = create<AppState>((set, get) => ({
     // Silence anything currently ringing so muting takes effect immediately even
     // for a key/note held down across the toggle. In-memory only — not persisted.
     if (!on) instrument.releaseAll();
+  },
+  setInputLatencyMs(ms) {
+    const safe = Number.isFinite(ms) ? ms : 0;
+    const clamped = Math.round(Math.max(INPUT_LATENCY_MIN_MS, Math.min(INPUT_LATENCY_MAX_MS, safe)));
+    inputLatencyMs = clamped; // the shared learnerClock reads this synchronously
+    set({ inputLatencyMs: clamped });
+    void persistence.saveSettings({ inputLatencyMs: clamped }).then((s) => set({ settings: s }));
   },
 
   async connectMidi() {

@@ -1,5 +1,6 @@
 import 'fake-indexeddb/auto';
 import { describe, it, expect, beforeEach } from 'vitest';
+import { openDB } from 'idb';
 import {
   saveSong,
   listSongs,
@@ -97,5 +98,53 @@ describe('settings', () => {
     await saveSettings({ lastMidiInputId: 'dev-1' });
     const settings = await loadSettings();
     expect(settings).toEqual({ ...DEFAULT_SETTINGS, tempoScale: 0.75, lastMidiInputId: 'dev-1' });
+  });
+
+  it('defaults inputLatencyMs to 0 and round-trips a saved value', async () => {
+    expect((await loadSettings()).inputLatencyMs).toBe(0);
+    await saveSettings({ inputLatencyMs: 80 });
+    expect((await loadSettings()).inputLatencyMs).toBe(80);
+  });
+});
+
+describe('settings migration (DB v1 -> v2)', () => {
+  it('back-fills inputLatencyMs onto an existing v1 settings record, keeping the other fields', async () => {
+    // Open the database at the OLD v1 schema and write a settings record that
+    // predates `inputLatencyMs` (the field the v2 upgrade introduces).
+    const v1 = await openDB('piano-shadow', 1, {
+      upgrade(db) {
+        db.createObjectStore('songs', { keyPath: 'id' }).createIndex('savedAt', 'savedAt');
+        const attempts = db.createObjectStore('attempts', { keyPath: 'id' });
+        attempts.createIndex('songId', 'songId');
+        attempts.createIndex('createdAt', 'createdAt');
+        db.createObjectStore('settings', { keyPath: 'id' });
+      },
+    });
+    await v1.put('settings', {
+      id: 'settings',
+      tempoScale: 0.5,
+      metronomeEnabled: true,
+      countInEnabled: false,
+      lastMidiInputId: 'device-42',
+      showDebugPanel: true,
+    });
+    v1.close();
+
+    // Reopening through the app (getDb -> DB_VERSION 2) runs the v2 upgrade.
+    const migrated = await loadSettings();
+    expect(migrated.inputLatencyMs).toBe(0);
+    expect(migrated).toMatchObject({
+      tempoScale: 0.5,
+      metronomeEnabled: true,
+      countInEnabled: false,
+      lastMidiInputId: 'device-42',
+      showDebugPanel: true,
+    });
+
+    // The field was written into the stored record, not merely merged on read.
+    const raw = await openDB('piano-shadow', 2);
+    const stored = await raw.get('settings', 'settings');
+    raw.close();
+    expect(stored).toMatchObject({ id: 'settings', inputLatencyMs: 0, tempoScale: 0.5, lastMidiInputId: 'device-42' });
   });
 });
