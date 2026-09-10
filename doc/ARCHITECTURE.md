@@ -155,3 +155,27 @@ IndexedDB via `idb` (`services/persistence.ts`): imported songs, practice
 attempts with their full score breakdown, and settings (tempo scale, metronome,
 count-in, last MIDI input, debug panel visibility). No account, no login, no
 network calls.
+
+## Staff-notation view — scope (v0.8.0, signed off 2026-09-10)
+
+`components/sheet-music/ScoreView.tsx` renders standard staff notation with
+`vexflow`. Spec §35 forbids **"automatic sheet music generation"**; spec §12's
+own module tree nonetheless lists `components/sheet-music/`. This is the agreed
+boundary that keeps both true:
+
+- **Input is an imported-MIDI `Performance` only.** Those carry real, authored
+  note durations and a `tempoMap` / `timeSignatureMap`. The view maps
+  seconds → beats via the `tempoMap` and snaps to note values by **reusing**
+  `quantization/quantize.ts` (`gridSecondsFor`, `quantizeNotes`), then buckets
+  each note to the nearest 1/1…1/16. It is a *display transform of data the user
+  already supplied*, not transcription.
+- **Recorded / recognised takes are refused.** A microphone- or device-recorded
+  `Performance` has no quantised rhythm, so `ScoreView` shows
+  *"notation needs a quantised rhythm — not available for recorded takes yet"*
+  rather than guessing. No audio → notation, no OMR, no AI.
+- **Display-only.** No note editing, no drag, no MIDI/MusicXML/PDF export from
+  this view. It never writes back to the `Performance` or the store.
+- **Not the primary surface.** Mounted behind a default-collapsed
+  *"Show notation"* toggle on `PracticePage`; the on-screen keyboard stays the
+  primary visual per the v0.4 single-page direction. `practice-engine` /
+  `playback-engine` / scoring are untouched — the view only reads `song.notes`.
