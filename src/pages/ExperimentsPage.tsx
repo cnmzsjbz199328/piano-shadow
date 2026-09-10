@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { WebMidiAdapter } from '@/device-adapters';
+import { useAppStore } from '@/stores/useAppStore';
 
 interface AudioCapabilities {
   sampleRate: number;
@@ -11,6 +12,12 @@ export function ExperimentsPage() {
   const [audio, setAudio] = useState<AudioCapabilities | null>(null);
   const [audioError, setAudioError] = useState<string | null>(null);
 
+  const inputLatencyMs = useAppStore((s) => s.inputLatencyMs);
+  const setInputLatencyMs = useAppStore((s) => s.setInputLatencyMs);
+  // Local draft so the user can clear the field / type a minus sign before the
+  // store clamps and persists on commit (blur or Enter).
+  const [latencyDraft, setLatencyDraft] = useState<string>(String(inputLatencyMs));
+
   function checkAudio() {
     try {
       const Ctor = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
@@ -21,6 +28,12 @@ export function ExperimentsPage() {
     } catch (err) {
       setAudioError(err instanceof Error ? err.message : 'Could not create an AudioContext.');
     }
+  }
+
+  function commitLatency() {
+    const parsed = Number(latencyDraft.trim());
+    setInputLatencyMs(Number.isFinite(parsed) ? parsed : 0);
+    setLatencyDraft(String(useAppStore.getState().inputLatencyMs));
   }
 
   return (
@@ -54,6 +67,46 @@ export function ExperimentsPage() {
           )}
           {audioError && <p style={{ color: 'var(--wrong)' }}>{audioError}</p>}
         </div>
+      </div>
+
+      <div className="panel">
+        <h2>Input latency compensation</h2>
+        <div className="capability-row">
+          <label htmlFor="input-latency-ms">Input latency compensation (ms)</label>
+          <input
+            id="input-latency-ms"
+            type="number"
+            inputMode="numeric"
+            step={5}
+            min={-200}
+            max={500}
+            value={latencyDraft}
+            onChange={(e) => setLatencyDraft(e.target.value)}
+            onBlur={commitLatency}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') e.currentTarget.blur();
+            }}
+            style={{
+              width: '6rem',
+              padding: '0.35rem 0.5rem',
+              background: 'var(--bg-elevated-2)',
+              border: '1px solid var(--border-subtle)',
+              borderRadius: 'var(--radius-sm)',
+              textAlign: 'right',
+              fontVariantNumeric: 'tabular-nums',
+            }}
+          />
+        </div>
+        <p>
+          A positive value shifts every recorded learner onset earlier before scoring, to cancel
+          device / OS / audio-scan delay so an on-time performance is scored as on-time. Applied once,
+          at the shared learner clock (spec §6); clamped to −200…500&nbsp;ms. Currently in effect:{' '}
+          <strong>{inputLatencyMs} ms</strong>.
+        </p>
+        <p>
+          A guided tap-to-calibrate flow (play along with the metronome, measure your own offset
+          automatically) is future work — for now, set the value by hand.
+        </p>
       </div>
 
       <div className="panel">

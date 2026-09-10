@@ -33,6 +33,13 @@ export interface SettingsRecord {
   countInEnabled: boolean;
   lastMidiInputId: string | null;
   showDebugPanel: boolean;
+  /**
+   * Fixed input-latency compensation in milliseconds (spec §6). A positive value
+   * means the learner's note-ons register late (device / OS / audio-scan
+   * latency); the store subtracts it from recorded learner onsets at the single
+   * clock boundary so an on-time performance is scored as on-time. Added in DB v2.
+   */
+  inputLatencyMs: number;
 }
 
 interface PianoShadowDB extends DBSchema {
@@ -42,7 +49,12 @@ interface PianoShadowDB extends DBSchema {
 }
 
 const DB_NAME = 'piano-shadow';
-const DB_VERSION = 1;
+/**
+ * v1: initial stores. v2: `SettingsRecord.inputLatencyMs` (Track G2) — the
+ * `upgrade` callback back-fills it onto any existing settings record so an
+ * upgrading user keeps their other settings.
+ */
+const DB_VERSION = 2;
 const SETTINGS_KEY = 'settings' as const;
 
 export const DEFAULT_SETTINGS: SettingsRecord = {
@@ -51,6 +63,7 @@ export const DEFAULT_SETTINGS: SettingsRecord = {
   countInEnabled: true,
   lastMidiInputId: null,
   showDebugPanel: false,
+  inputLatencyMs: 0,
 };
 
 let dbPromise: Promise<IDBPDatabase<PianoShadowDB>> | null = null;
@@ -58,13 +71,26 @@ let dbPromise: Promise<IDBPDatabase<PianoShadowDB>> | null = null;
 function getDb(): Promise<IDBPDatabase<PianoShadowDB>> {
   if (!dbPromise) {
     dbPromise = openDB<PianoShadowDB>(DB_NAME, DB_VERSION, {
-      upgrade(db) {
-        const songs = db.createObjectStore('songs', { keyPath: 'id' });
-        songs.createIndex('savedAt', 'savedAt');
-        const attempts = db.createObjectStore('attempts', { keyPath: 'id' });
-        attempts.createIndex('songId', 'songId');
-        attempts.createIndex('createdAt', 'createdAt');
-        db.createObjectStore('settings', { keyPath: 'id' });
+      async upgrade(db, oldVersion, _newVersion, tx) {
+        if (oldVersion < 1) {
+          const songs = db.createObjectStore('songs', { keyPath: 'id' });
+          songs.createIndex('savedAt', 'savedAt');
+          const attempts = db.createObjectStore('attempts', { keyPath: 'id' });
+          attempts.createIndex('songId', 'songId');
+          attempts.createIndex('createdAt', 'createdAt');
+          db.createObjectStore('settings', { keyPath: 'id' });
+        }
+        if (oldVersion < 2) {
+          // v1 -> v2: back-fill `inputLatencyMs` onto an existing settings
+          // record so an upgrading user keeps tempoScale / metronome / MIDI
+          // input / etc. A fresh DB has no settings row yet (oldVersion 0) —
+          // first-run defaults from `DEFAULT_SETTINGS` apply instead.
+          const settings = tx.objectStore('settings');
+          const existing = await settings.get(SETTINGS_KEY);
+          // A v1 record has no `inputLatencyMs` at all, so back-fill it to 0
+          // while keeping every other field the user had.
+          if (existing) await settings.put({ ...existing, inputLatencyMs: 0 });
+        }
       },
     });
   }
@@ -138,7 +164,9 @@ export async function loadSettings(): Promise<SettingsRecord> {
   const existing = await db.get('settings', SETTINGS_KEY);
   if (!existing) return DEFAULT_SETTINGS;
   const { id: _id, ...settings } = existing;
-  return settings;
+  // Merge onto defaults so a field added in a later DB version is always present
+  // even if a migration write was interrupted (defense in depth for spec §18).
+  return { ...DEFAULT_SETTINGS, ...settings };
 }
 
 export async function saveSettings(patch: Partial<SettingsRecord>): Promise<SettingsRecord> {
