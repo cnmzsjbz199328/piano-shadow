@@ -77,6 +77,14 @@ body,
   height: 100%;
 }
 
+/* Safety net: never let a wide child (e.g. the piano keyboard) scroll the page
+   sideways on small screens. `clip` (not `hidden`) so `.keyboard-dock`'s
+   `position: sticky` still works. */
+html,
+body {
+  overflow-x: clip;
+}
+
 body {
   margin: 0;
   background: var(--bg);
@@ -679,6 +687,10 @@ select {
   gap: var(--space-4);
 }
 
+.recognition-panel__topline {
+  flex-wrap: wrap;
+}
+
 .recognition-panel h1 {
   font-size: var(--text-2xl);
   margin: 0.15rem 0 0;
@@ -1134,6 +1146,7 @@ select {
   margin-bottom: 0.35rem;
   font-size: var(--text-xs);
   color: var(--text-faint);
+  flex-wrap: wrap;
 }
 
 .keyboard-dock__hint {
@@ -1228,6 +1241,11 @@ select {
 .piano-keyboard {
   position: relative;
   width: 100%;
+  /* 1352 = the 88-key default totalWidth (52 white keys × 26). Capping here
+     keeps the desktop keyboard visually identical while the SVG below scales
+     down to fit narrower viewports. */
+  max-width: 1352px;
+  margin-inline: auto;
   overflow-x: auto;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
@@ -1267,6 +1285,11 @@ select {
 
 .piano-keyboard svg {
   display: block;
+  /* Fluid: `width="100%"` + `preserveAspectRatio="none"` on the SVG squash the
+     keys horizontally to fit; this clamp gives them a sane responsive height
+     rather than scaling proportionally to hair-thin. */
+  width: 100%;
+  height: clamp(72px, 14vw, 130px);
 }
 
 .piano-key {
@@ -1451,6 +1474,16 @@ select {
 @media (max-width: 720px) {
   .score-row {
     grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  .score-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  /* the uppercase labels need the extra width more than the tracking */
+  .score-cell__label {
+    letter-spacing: normal;
   }
 }
 

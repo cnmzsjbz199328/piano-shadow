@@ -6,7 +6,15 @@ import {
   type PointerEvent as ReactPointerEvent,
   type KeyboardEvent as ReactKeyboardEvent,
 } from 'react';
-import { isBlackKey, midiToNoteName } from '@/music-model';
+import { midiToNoteName } from '@/music-model';
+import {
+  buildKeyLayout,
+  centreXForMidi,
+  WHITE_WIDTH,
+  BLACK_WIDTH,
+  WHITE_HEIGHT,
+  BLACK_HEIGHT,
+} from './keyLayout';
 
 /**
  * The virtual piano keyboard (spec §2.2.A) — mouse/touch and computer-keyboard
@@ -14,10 +22,13 @@ import { isBlackKey, midiToNoteName } from '@/music-model';
  * testable with no hardware attached.
  *
  * Phase C (ROUND_3_REQUIREMENTS §C.2.4): the default range is the full 88-key
- * piano (A0–C8). It is ~1352px wide at the current white-key width, so it
- * scrolls horizontally inside its own container; `focusMidi` scrolls the
- * relevant octave into view (initially middle C). The QWERTY input mapping is
- * unchanged and out of scope here.
+ * piano (A0–C8). The SVG is drawn fluidly (`width="100%"`,
+ * `preserveAspectRatio="none"`) and its CSS height is clamped, so the whole
+ * keyboard scales to fit the viewport with no horizontal page scroll — the key
+ * geometry (in `./keyLayout`) is unchanged, only how the SVG paints it.
+ * `focusMidi` still scrolls the relevant octave into view *if* a caller passes
+ * a range too wide to fit (`scrollWidth > clientWidth`); at fit scale it is a
+ * no-op. The QWERTY input mapping is unchanged and out of scope here.
  */
 
 interface PianoKeyboardProps {
@@ -32,42 +43,6 @@ interface PianoKeyboardProps {
   onPress: (midi: number, velocity?: number) => void;
   onRelease: (midi: number) => void;
   disabled?: boolean;
-}
-
-const WHITE_WIDTH = 26;
-const BLACK_WIDTH = 16;
-const WHITE_HEIGHT = 130;
-const BLACK_HEIGHT = 82;
-
-interface KeyLayout {
-  whites: Array<{ midi: number; x: number }>;
-  blacks: Array<{ midi: number; x: number }>;
-  totalWidth: number;
-}
-
-function buildKeyLayout(low: number, high: number): KeyLayout {
-  const whites: KeyLayout['whites'] = [];
-  for (let m = low, i = 0; m <= high; m++) {
-    if (!isBlackKey(m)) {
-      whites.push({ midi: m, x: i * WHITE_WIDTH });
-      i++;
-    }
-  }
-  const whiteByMidi = new Map(whites.map((w) => [w.midi, w]));
-  const blacks: KeyLayout['blacks'] = [];
-  for (let m = low; m <= high; m++) {
-    if (!isBlackKey(m)) continue;
-    const prevWhite = whiteByMidi.get(m - 1);
-    if (prevWhite) blacks.push({ midi: m, x: prevWhite.x + WHITE_WIDTH - BLACK_WIDTH / 2 });
-  }
-  return { whites, blacks, totalWidth: whites.length * WHITE_WIDTH };
-}
-
-/** White-key x-centre for a pitch (falls back to the nearest lower white key). */
-function centreXForMidi(layout: KeyLayout, midi: number): number | null {
-  const target = isBlackKey(midi) ? midi - 1 : midi;
-  const white = layout.whites.find((w) => w.midi === target) ?? layout.whites.find((w) => w.midi >= target);
-  return white ? white.x + WHITE_WIDTH / 2 : null;
 }
 
 // QWERTY row -> semitone offset from the current base octave (z/x shift octaves).
@@ -202,9 +177,10 @@ export function PianoKeyboard({
       )}
       <div className="piano-keyboard" ref={scrollRef}>
         <svg
-          width={layout.totalWidth}
+          width="100%"
           height={WHITE_HEIGHT}
           viewBox={`0 0 ${layout.totalWidth} ${WHITE_HEIGHT}`}
+          preserveAspectRatio="none"
           role="group"
           aria-label="Virtual piano keyboard"
         >

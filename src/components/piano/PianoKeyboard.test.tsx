@@ -46,4 +46,24 @@ describe('PianoKeyboard', () => {
     fireEvent.keyDown(input, { key: 'a' });
     expect(onPress).not.toHaveBeenCalled();
   });
+
+  it('renders a fluid svg (no fixed pixel width) with a viewBox so it scales to fit', () => {
+    const { container } = render(
+      <PianoKeyboard heldMidi={[]} onPress={() => {}} onRelease={() => {}} />,
+    );
+    const svg = container.querySelector('svg');
+    expect(svg).not.toBeNull();
+
+    const width = svg!.getAttribute('width');
+    // width must be absent or "100%" — never a fixed pixel number (e.g. "1352").
+    expect(width === null || width === '100%').toBe(true);
+    expect(width ?? '').not.toMatch(/^\d+(px)?$/);
+
+    expect(svg!.getAttribute('viewBox')).toBeTruthy();
+  });
+
+  it('keeps the "Key {midi}" aria-labels the E2E suite depends on', () => {
+    render(<PianoKeyboard heldMidi={[]} onPress={() => {}} onRelease={() => {}} lowMidi={60} highMidi={64} />);
+    expect(screen.getByLabelText('Key 60')).toBeInTheDocument();
+  });
 });
