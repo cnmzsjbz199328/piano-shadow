@@ -14,9 +14,12 @@ Boundaries are enforced two ways:
 
 ```
 music-model  →  midi / quantization  →  practice-engine  →  playback-engine
-                                                          ↘
+                                                          ↘   ↗ audio-engine
                                               device-adapters  →  stores/services  →  components/pages
 ```
+
+`audio-engine` is a peer of `playback-engine` (both may only reach `music-model`);
+`playback-engine` and `stores` import it, nothing else does.
 
 ## The pipeline
 
@@ -58,7 +61,8 @@ input, same output, always (spec §21.1).
 | `midi` | Standard MIDI File import (`@tonejs/midi`) → `Performance`; `writeMidiFile` (`Performance` → SMF) for library Export; built-in demo melodies | `music-model` |
 | `quantization` | Non-destructive grid-snap for a future Teach Mode capture pipeline | `music-model` |
 | `practice-engine` | `SequenceAligner` (DP alignment), `timingAnalyzer` (tempo/rhythm split), `scoring`, `evaluatePerformance`, `LiveMatcher` | `music-model` only |
-| `playback-engine` | `PlaybackEngine` (Tone.js transport wrapper: play/pause/seek/tempo/metronome/count-in), `timeMapping` (pure clock math), `Metronome` (pure beat-grid math) | `music-model` |
+| `playback-engine` | `PlaybackEngine` (Tone.js transport wrapper: play/pause/seek/tempo/metronome/count-in), `timeMapping` (pure clock math), `Metronome` (pure beat-grid math) | `music-model`, `audio-engine` |
+| `audio-engine` | `SampledInstrument` — one shared sampled-piano voice bank (`smplr` `SplendidGrandPiano`, streamed samples) for reference playback **and** audible learner input (keyboard / live MIDI / recognised notes); transparent `Tone.PolySynth(Tone.Synth)` fallback if samples can't load. Its own module, a peer of `playback-engine`, so sound generation stays out of React (spec §25) and rides the existing Tone schedule rather than adding a timer. Called only from `playback-engine` and `stores`. | `music-model` |
 | `device-adapters` | `NoteInputAdapter` boundary, `VirtualKeyboardAdapter`, `WebMidiAdapter`, `MicrophoneAdapter` (composes `recognition/`; monophonic Pitchy, experimental — see below), `PerformanceRecorder` | `music-model`, `recognition` |
 | `recognition` | `NoteRecognizer` interface + `PitchyRecognizer` / `BasicPitchRecognizer` / `MicrophoneCapture` / `benchmark` (used by `MicrophoneAdapter` and the `/lab` diagnostics page) | `music-model` |
 | `services` | `persistence` — IndexedDB (songs, attempts, settings) via `idb` | `music-model`, `practice-engine` |
@@ -101,6 +105,13 @@ Learner input adapters (`VirtualKeyboardAdapter`, `WebMidiAdapter`) are
 constructed with `() => engine.getCurrentTime()` as their clock, so a learner's
 onset and the reference's onset are directly comparable numbers.
 
+`audio-engine`'s `SampledInstrument` renders into `Tone.getContext().rawContext`
+— the *same* AudioContext Tone schedules against — so a `time` handed to it from
+inside a `Tone.getTransport().scheduleOnce((time) => …)` callback is already in
+its clock domain. It is a second *sound source* on the one schedule, not a
+second clock: `PlaybackEngine` still owns all timing; the instrument only turns
+note numbers into sound.
+
 `MicrophoneAdapter` (v0.4.0) is used for **recognition only** — capturing playing
 into a fresh `Performance` — not yet as a practice-attempt input. Its onsets run
 on a `performance.now()` clock local to the recognition session and feed a
@@ -116,7 +127,10 @@ session.
 created once as module-scoped instances in `stores/useAppStore.ts` — one
 AudioContext / input pipeline for the app's lifetime, the same way any web app
 owns a single audio graph — and they communicate with the store exclusively by
-pushing plain-object snapshots through `setState`. Scores are never stored as
+pushing plain-object snapshots through `setState`. `audio-engine`'s
+`instrument` singleton is owned the same way (module scope, app lifetime); the
+store calls its `attack` / `release` from the keyboard / MIDI / recognition
+paths, gated by an in-memory `soundEnabled` flag. Scores are never stored as
 mutable state directly written by the UI; every `EvaluationResult` in the store
 came from a call to `evaluatePerformance` (spec §25).
 
