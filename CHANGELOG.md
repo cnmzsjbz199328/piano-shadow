@@ -1,5 +1,47 @@
 # Changelog
 
+## v0.9.0 — Score / Library flip workspace (2026-09-10)
+
+UI/interaction round from [`doc/UI_OPTIMIZATION_PLAN.md`](doc/UI_OPTIMIZATION_PLAN.md).
+The Practice page becomes one continuous workspace. No change to the note model,
+sequence aligner, playback clock, or scoring — only information architecture and
+interaction.
+
+- **Shared workspace stage.** `src/components/practice/PracticeWorkspace.tsx` is a
+  fixed-size container with two mutually exclusive faces — **Score** and
+  **Library** — that turn over like a card (`rotateY`, 420 ms `ease-in-out`).
+  Repeat triggers are locked out mid-flip; the inactive (and still-turning) face
+  is `inert` + `aria-hidden`, so a screen reader never reads across both lists;
+  focus moves to the newly shown face's heading once the flip settles. Degrades
+  to an instant swap under `prefers-reduced-motion`, on a phone-width viewport,
+  or with no 3D transforms (`data-instant`, mirrored in JS and CSS).
+- **Score is the default surface, not a collapsed toggle.**
+  `src/components/sheet-music/ScoreSurface.tsx` gives `ScoreView` a light toolbar
+  and its own `overflow-y: auto` viewport — a long piece scrolls its staves, not
+  the page frame or the keyboard dock. Scroll position survives a flip (the
+  element is never unmounted); a new song resets to the top. `MAX_MEASURES`
+  raised 16 → 64 now that height is scrollable, not squeezed.
+- **Library shares the stage.** `SongLibrary` re-housed as the flip's back face:
+  one header (count + Import + "Back to score"), a self-scrolling list, current
+  song marked with a left accent + "Current" badge, empty state with a prominent
+  drop zone and built-in demos, and the import-failure banner reported next to
+  the Import control (the surface in view never changes on failure).
+- **Keyboard dock is outside the stage.** It never moves or scales when the
+  workspace flips or the score scrolls (D-04) — asserted in E2E by comparing its
+  bounding box across a full Score→Library→Score cycle.
+- **Top toolbar** carries the high-frequency actions: current song, Play / Pause
+  / Stop / Restart, progress, tempo, and the Score / Library switch. MIDI,
+  debug, and low-frequency settings stay in the secondary `Practice settings`
+  disclosure.
+- Store: `practiceSurface` (`'score' | 'library'`, in-memory, UI-only) follows
+  the loaded song — import stays on Library, choosing / demo-loading a song
+  flips to Score, clearing falls back to Library.
+- Removed the dead `PracticeEmptyState` (folded into the two surfaces).
+- Tests: `PracticeWorkspace` (flip, inert, focus, reduced-motion),
+  `SongLibrary` (header, current row, demos, back-to-score, import error),
+  `useAppStore` surface routing, updated `ScoreView` measure cap, and an E2E
+  for the Score↔Library flip + dock stability.
+
 ## v0.8.1 — Recognition no longer echoes or fights playback (2026-09-10)
 
 Live-testing fix. On the deployed v0.8.0, hitting **Listen** (microphone

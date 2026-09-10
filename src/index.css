@@ -62,6 +62,13 @@
   --control-h: 2.25rem;
   --nav-h: 3.25rem;
 
+  /* Shared Practice workspace stage height (UI_OPTIMIZATION_PLAN.md §4.2, §12).
+     The Score and Library faces share this box exactly, so switching surfaces
+     never moves the keyboard dock below. Tuned down at narrower widths. */
+  --workspace-h: clamp(300px, 48vh, 540px);
+  /* Flip length; the component also passes this inline as --flip-ms. */
+  --flip-ms: 420ms;
+
   --font-sans:
     'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   --font-mono: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
@@ -814,17 +821,14 @@ select {
 .import-row { max-width: 25rem; }
 .import-zone--compact { padding: 1.2rem 1rem; }
 
-.song-library { margin-top: var(--space-5); }
-.song-library--compact { margin-top: 0; }
 .library-empty {
-  margin-top: var(--space-3);
-  padding: var(--space-4);
-  border: 1px dashed var(--border);
-  border-radius: var(--radius-sm);
   color: var(--text-faint);
   font-size: var(--text-sm);
 }
-.song-list { display: flex; flex-direction: column; gap: 0.45rem; margin-top: var(--space-3); }
+.library-empty p { margin: 0; }
+.library-empty__demos { display: flex; flex-direction: column; gap: var(--space-2); }
+.library-empty__demos > span { color: var(--text-faint); font-size: var(--text-xs); }
+.song-list { display: flex; flex-direction: column; gap: 0.45rem; }
 .song-row {
   display: flex;
   align-items: center;
@@ -835,14 +839,30 @@ select {
   border-radius: var(--radius-sm);
   background: var(--bg-elevated);
 }
-.song-row--current { border-color: color-mix(in srgb, var(--accent) 50%, var(--border)); }
+.song-row--current {
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
+  background: var(--accent-dim);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
 .song-row__main { display: flex; min-width: 0; flex-direction: column; gap: 0.15rem; }
 .song-row__main strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .song-row__main span { color: var(--text-faint); font-size: var(--text-xs); }
+.song-row__badge {
+  display: inline-block;
+  margin-right: 0.4rem;
+  padding: 0.02rem 0.4rem;
+  border-radius: var(--radius-full);
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  vertical-align: 0.05rem;
+}
 .song-row__actions { display: flex; flex-shrink: 0; gap: 0.35rem; }
 .btn--danger-quiet { color: var(--wrong); }
 
-.library-toolbar { margin-top: var(--space-5); }
 .practice-result {
   padding: var(--space-4);
   border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border-subtle));
@@ -851,16 +871,6 @@ select {
 }
 .practice-result .score-row { margin: var(--space-4) 0; }
 .practice-result__note { margin: var(--space-3) 0 0; font-size: var(--text-sm); }
-
-.practice-note-focus {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-3);
-  padding: 0.75rem 0.15rem;
-  border-bottom: 1px solid var(--border-subtle);
-}
-.practice-note-focus strong { color: var(--accent); font-size: var(--text-lg); }
-.practice-note-focus > span:last-child { color: var(--text-faint); font-size: var(--text-xs); }
 
 .practice-settings { border-bottom: 1px solid var(--border-subtle); color: var(--text-dim); font-size: var(--text-sm); }
 .practice-settings summary { padding: 0.55rem 0.15rem; cursor: pointer; }
@@ -881,6 +891,11 @@ select {
   flex-wrap: wrap;
 }
 
+.practice-header__id {
+  min-width: 0;
+  margin-right: auto;
+}
+
 .practice-header__title {
   font-size: var(--text-xl);
   font-weight: 650;
@@ -899,6 +914,12 @@ select {
   display: flex;
   align-items: center;
   gap: var(--space-2);
+}
+
+/* Score / Library surface switch — reuses the segmented `.mode-tabs` look so it
+   reads as a peer of the practice-mode control, not a new visual language. */
+.surface-switch {
+  flex-shrink: 0;
 }
 
 /* segmented mode control */
@@ -1731,6 +1752,15 @@ select {
     gap: var(--space-2);
   }
 
+  /* Tablet: trim the frame and let the header toolbar wrap (§7). */
+  :root {
+    --workspace-h: clamp(280px, 46vh, 460px);
+  }
+
+  .practice-page {
+    padding: var(--space-3) var(--space-3) 0;
+  }
+
   .practice-header__center {
     order: 3;
     margin: 0;
@@ -1739,6 +1769,10 @@ select {
 
   .practice-header__title {
     max-width: none;
+  }
+
+  .practice-header__id {
+    margin-right: 0;
   }
 }
 
@@ -1749,6 +1783,20 @@ select {
   .song-row__actions { width: 100%; }
   .song-row__actions .btn { flex: 1; }
   .tempo-control { margin-left: 0; }
+
+  /* Phone: the surface fills the width and the flip degrades to an instant
+     swap (§7). `PracticeWorkspace` sets data-instant to match. */
+  :root {
+    --workspace-h: clamp(260px, 58vh, 420px);
+  }
+
+  .surface-switch {
+    width: 100%;
+  }
+
+  .surface-switch button {
+    flex: 1;
+  }
 }
 
 /* --- falling-notes guidance layer (Track D · v0.6.0) --- */
@@ -1775,39 +1823,195 @@ select {
   background: var(--bg-elevated-2);
 }
 
-/* --- staff-notation view (Track F · v0.8.0) — secondary, opt-in surface --- */
+/* --- shared Practice workspace: Score / Library flip stage (UI_OPTIMIZATION_PLAN.md §4–§6) --- */
 
-.notation-panel {
-  border-top: 1px solid var(--border-subtle);
-  margin-top: var(--space-3);
+.practice-workspace {
+  perspective: 1600px;
 }
-.notation-panel > summary {
-  padding: 0.6rem 0.15rem;
-  cursor: pointer;
-  list-style: none;
+
+/* The fixed frame. Score and Library share this box exactly, so a flip never
+   changes where the keyboard dock sits (D-03, D-04). */
+.practice-workspace__viewport {
+  position: relative;
+  height: var(--workspace-h);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: var(--bg-elevated);
+}
+
+.practice-workspace__flipper {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  transition: transform var(--flip-ms, 420ms) ease-in-out;
+}
+
+.practice-workspace[data-surface='library'] .practice-workspace__flipper {
+  transform: rotateY(180deg);
+}
+
+.practice-workspace__face {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: inherit;
+  background: var(--bg-elevated);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+.practice-workspace__face--library {
+  transform: rotateY(180deg);
+}
+
+/* Instant-swap fallback: reduced motion, no 3D transforms, or a phone-width
+   viewport (§5.2, §7). `PracticeWorkspace` mirrors these triggers in JS via
+   `data-instant` so the focus-move timing matches. */
+.practice-workspace[data-instant] {
+  perspective: none;
+}
+.practice-workspace[data-instant] .practice-workspace__flipper {
+  transform: none !important;
+  transition: none;
+}
+.practice-workspace[data-instant] .practice-workspace__face {
+  backface-visibility: visible;
+  -webkit-backface-visibility: visible;
+  transition: opacity 0.14s linear;
+}
+.practice-workspace[data-instant] .practice-workspace__face--library {
+  transform: none;
+}
+.practice-workspace[data-instant][data-surface='score'] .practice-workspace__face--library,
+.practice-workspace[data-instant][data-surface='library'] .practice-workspace__face--score {
+  opacity: 0;
+  visibility: hidden;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .practice-workspace { perspective: none; }
+  .practice-workspace__flipper { transform: none !important; transition: none; }
+  .practice-workspace__face {
+    backface-visibility: visible;
+    -webkit-backface-visibility: visible;
+  }
+  .practice-workspace__face--library { transform: none; }
+  .practice-workspace[data-surface='score'] .practice-workspace__face--library,
+  .practice-workspace[data-surface='library'] .practice-workspace__face--score {
+    opacity: 0;
+    visibility: hidden;
+  }
+}
+
+@supports not (transform-style: preserve-3d) {
+  .practice-workspace__flipper { transform: none !important; }
+  .practice-workspace__face { backface-visibility: visible; }
+  .practice-workspace__face--library { transform: none; }
+  .practice-workspace[data-surface='score'] .practice-workspace__face--library,
+  .practice-workspace[data-surface='library'] .practice-workspace__face--score {
+    opacity: 0;
+    visibility: hidden;
+  }
+}
+
+/* Header shared by both faces — same tokens, border, and padding so the two
+   surfaces read as one workspace, not two pages (§3, §6.1). */
+.workspace-surface__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-shrink: 0;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.workspace-surface__title {
+  margin: 0.1rem 0 0;
+  font-size: var(--text-lg);
+}
+
+.workspace-surface__title:focus {
+  outline: none;
+}
+
+.workspace-surface__status {
+  flex-shrink: 0;
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+  padding-top: 0.3rem;
+}
+
+/* --- score face --- */
+
+.score-surface {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* The independent vertical scroll viewport (§5.3). Only this scrolls for a long
+   piece — never the page frame, never the keyboard dock. */
+.score-surface__viewport {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: var(--space-4);
+}
+
+.score-surface__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
   color: var(--text-dim);
   font-size: var(--text-sm);
 }
-.notation-panel > summary::-webkit-details-marker {
-  display: none;
-}
-.notation-panel > summary::before {
-  content: '▸ ';
-  color: var(--text-faint);
-}
-.notation-panel[open] > summary::before {
-  content: '▾ ';
-}
-.notation-panel > summary:hover {
-  color: var(--text);
+
+/* --- library face --- */
+
+.song-library {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
 }
 
+.song-library__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+/* The list scrolls inside its own region; the workspace frame does not grow
+   with it (§5.4). */
+.song-library .song-list,
+.song-library .library-empty {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+}
+
+.song-library .library-empty {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.song-library .error-banner {
+  margin: var(--space-3) var(--space-4) 0;
+}
+
+/* --- ScoreView internals (Track F · v0.8.0), now housed in the score viewport --- */
+
 .score-view {
-  margin: var(--space-2) 0 var(--space-4);
-  padding: var(--space-3);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius);
-  background: var(--bg-elevated);
   color: var(--text);
 }
 .score-view--empty p,

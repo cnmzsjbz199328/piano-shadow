@@ -68,7 +68,8 @@ input, same output, always (spec §21.1).
 | `services` | `persistence` — IndexedDB (songs, attempts, settings) via `idb` | `music-model`, `practice-engine` |
 | `stores` | `useAppStore` (Zustand) — the only place the engines above are instantiated and wired together | everything below it |
 | `components`, `pages` | React UI; all user-facing language (early/late/wrong-note/etc.) lives here, never in `practice-engine` | `stores` and below |
-| `components/sheet-music` | `ScoreView` — read-only staff notation for an imported-MIDI `Performance` via `vexflow` (dynamic import); `secondsToNoteValue` maps quantised seconds → plain note values. Refuses recorded takes. See "Staff-notation view — scope" below. | `music-model`, `quantization`, `stores` |
+| `components/sheet-music` | `ScoreView` — read-only staff notation for an imported-MIDI `Performance` via `vexflow` (dynamic import); `ScoreSurface` wraps it in the score face's toolbar + independent scroll viewport; `secondsToNoteValue` maps quantised seconds → plain note values. Refuses recorded takes. See "Staff-notation view — scope" below. | `music-model`, `quantization`, `stores` |
+| `components/practice` | `PracticeWorkspace` — the shared Score/Library flip stage (pure presentation shell: 3D flip on a controlled `surface` prop, `inert` + focus management, `data-instant` reduced-motion/no-3D/phone fallback); `SongLibrary` — the library face; `RecognitionControls`. Surface state is `stores.practiceSurface` (UI-only). | `stores` and below |
 
 ## Why a Sequence Aligner, not index matching
 
@@ -197,7 +198,12 @@ boundary that keeps both true:
   rather than guessing. No audio → notation, no OMR, no AI.
 - **Display-only.** No note editing, no drag, no MIDI/MusicXML/PDF export from
   this view. It never writes back to the `Performance` or the store.
-- **Not the primary surface.** Mounted behind a default-collapsed
-  *"Show notation"* toggle on `PracticePage`; the on-screen keyboard stays the
-  primary visual per the v0.4 single-page direction. `practice-engine` /
-  `playback-engine` / scoring are untouched — the view only reads `song.notes`.
+- **Promoted to the default surface (v0.9.0, UI_OPTIMIZATION_PLAN.md).** It was
+  behind a collapsed *"Show notation"* toggle; it is now the front face of the
+  shared `PracticeWorkspace`, wrapped by `ScoreSurface` in its own
+  `overflow-y: auto` viewport. The `vexflow` import is still dynamic (its own
+  chunk) but now triggers when a song loads rather than on toggle-open;
+  `MAX_MEASURES` is 64 (was 16) since the viewport scrolls. The on-screen
+  keyboard is still the primary practice visual — it sits in a dock *outside*
+  the flip stage. `practice-engine` / `playback-engine` / scoring are untouched;
+  the view only reads `song.notes`.

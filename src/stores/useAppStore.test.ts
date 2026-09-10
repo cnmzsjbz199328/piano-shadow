@@ -1,5 +1,5 @@
 import 'fake-indexeddb/auto';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 /**
  * Wave 2 / Track B: every audible-input path in the store funnels note-on /
@@ -249,5 +249,76 @@ describe('useAppStore — input-latency compensation (Track G2)', () => {
     expect(useAppStore.getState().inputLatencyMs).toBe(-200);
     useAppStore.getState().setInputLatencyMs(Number.NaN);
     expect(useAppStore.getState().inputLatencyMs).toBe(0);
+  });
+});
+
+/**
+ * doc/UI_OPTIMIZATION_PLAN.md §5.1: the shared workspace's operable face follows
+ * what just happened to the song, and an import failure never disturbs it. This
+ * is pure UI-routing state — no engine, matcher, clock, or score is involved.
+ */
+describe('useAppStore — practice surface follows the loaded song (UI plan §5.1)', () => {
+  // Minimal format-0 SMF: C4, D4, E4 — the same fixture the E2E suite uses.
+  const SMF = new Uint8Array([
+    0x4d, 0x54, 0x68, 0x64, 0, 0, 0, 6, 0, 0, 0, 1, 0, 96,
+    0x4d, 0x54, 0x72, 0x6b, 0, 0, 0, 31,
+    0, 0xc0, 0,
+    0, 0x90, 60, 100, 0x60, 0x80, 60, 64,
+    0, 0x90, 62, 100, 0x60, 0x80, 62, 64,
+    0, 0x90, 64, 100, 0x60, 0x80, 64, 64,
+    0, 0xff, 0x2f, 0,
+  ]);
+
+  // Tone's transport is a stub under jsdom, so the engine calls every
+  // song-loading / clearing action makes can't touch a real transport — no-op
+  // them; the surface routing under test happens in the store, before the
+  // engine is reached.
+  const spies: Array<ReturnType<typeof vi.spyOn>> = [];
+  beforeEach(() => {
+    const { engine } = _getEnginesForTests();
+    spies.push(
+      vi.spyOn(engine, 'load').mockImplementation(() => {}),
+      vi.spyOn(engine, 'stop').mockImplementation(() => {}),
+    );
+    useAppStore.setState({ practiceSurface: 'library', song: null, importError: null });
+  });
+  afterEach(() => {
+    for (const spy of spies.splice(0)) spy.mockRestore();
+  });
+
+  it('starts on the library face with nothing loaded', () => {
+    expect(useAppStore.getState().practiceSurface).toBe('library');
+  });
+
+  it('keeps a fresh import on the library face so the new song is visible', async () => {
+    await useAppStore.getState().importMidiFile(SMF.buffer, 'Surface import');
+    expect(useAppStore.getState().song?.name).toBe('Surface import');
+    expect(useAppStore.getState().practiceSurface).toBe('library');
+  });
+
+  it('flips to the score face when a song is chosen, and back to library when it is cleared', async () => {
+    await useAppStore.getState().importMidiFile(SMF.buffer, 'Surface pick');
+    const id = useAppStore.getState().song!.id;
+
+    useAppStore.setState({ practiceSurface: 'library' });
+    await useAppStore.getState().loadSavedSong(id);
+    expect(useAppStore.getState().practiceSurface).toBe('score');
+
+    useAppStore.getState().clearSong();
+    expect(useAppStore.getState().song).toBeNull();
+    expect(useAppStore.getState().practiceSurface).toBe('library');
+  });
+
+  it('loading a built-in demo flips to the score face', async () => {
+    useAppStore.setState({ practiceSurface: 'library' });
+    await useAppStore.getState().loadDemo('demo-twinkle');
+    expect(useAppStore.getState().practiceSurface).toBe('score');
+  });
+
+  it('an import failure leaves the surface untouched', async () => {
+    useAppStore.setState({ practiceSurface: 'score' });
+    await useAppStore.getState().importMidiFile(new Uint8Array([1, 2, 3, 4]).buffer, 'bad');
+    expect(useAppStore.getState().importError).toBeTruthy();
+    expect(useAppStore.getState().practiceSurface).toBe('score');
   });
 });

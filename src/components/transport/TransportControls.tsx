@@ -1,4 +1,4 @@
-import { useAppStore, type PracticeMode, type PracticeVoice } from '@/stores/useAppStore';
+import { useAppStore, type PracticeMode, type PracticeSurface, type PracticeVoice } from '@/stores/useAppStore';
 import { MIN_TEMPO_SCALE, MAX_TEMPO_SCALE } from '@/playback-engine';
 import { MidiDevicePanel } from './MidiDevicePanel';
 import { LiveFeedback } from '@/components/feedback/LiveFeedback';
@@ -21,7 +21,16 @@ function formatTime(seconds: number): string {
   return `${Math.floor(clamped / 60)}:${Math.floor(clamped % 60).toString().padStart(2, '0')}`;
 }
 
-export function TransportControls() {
+interface TransportControlsProps {
+  /** Which workspace face is currently shown. */
+  surface: PracticeSurface;
+  /** Request a flip to the other face (ignored by the caller while one is running). */
+  onSurfaceChange: (surface: PracticeSurface) => void;
+  /** Lock the switch while a flip is in flight (UI_OPTIMIZATION_PLAN.md §5.2). */
+  surfaceSwitchDisabled?: boolean;
+}
+
+export function TransportControls({ surface, onSurfaceChange, surfaceSwitchDisabled = false }: TransportControlsProps) {
   const song = useAppStore((s) => s.song);
   const mode = useAppStore((s) => s.mode);
   const setMode = useAppStore((s) => s.setMode);
@@ -53,7 +62,7 @@ export function TransportControls() {
   return (
     <div className="song-transport">
       <div className="practice-header">
-        <div>
+        <div className="practice-header__id">
           <span className="section-heading__eyebrow">Current reference</span>
           <h2 className="practice-header__title" title={song?.name}>{song?.name ?? 'No reference loaded'}</h2>
         </div>
@@ -63,6 +72,26 @@ export function TransportControls() {
           </button>
           <button type="button" className="btn btn--quiet btn--sm" disabled={disabled} onClick={stop}>Stop</button>
           <button type="button" className="btn btn--icon" aria-label="Restart from the beginning" disabled={disabled || recognitionActive} onClick={restart}>↶</button>
+        </div>
+        <div className="surface-switch mode-tabs" role="group" aria-label="Practice workspace surface">
+          <button
+            type="button"
+            aria-pressed={surface === 'score'}
+            aria-label="Show the score"
+            disabled={disabled || surfaceSwitchDisabled}
+            onClick={() => onSurfaceChange('score')}
+          >
+            Score
+          </button>
+          <button
+            type="button"
+            aria-pressed={surface === 'library'}
+            aria-label="Open the song library"
+            disabled={surfaceSwitchDisabled}
+            onClick={() => onSurfaceChange('library')}
+          >
+            Library
+          </button>
         </div>
       </div>
 

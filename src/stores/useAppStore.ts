@@ -29,6 +29,15 @@ export type PracticeMode = 'listen' | 'play-along' | 'wait';
 /** Which hand(s) of the reference to play back and score. */
 export type PracticeVoice = 'both' | 'left' | 'right';
 
+/**
+ * Which face of the shared Practice workspace is currently operable
+ * (doc/UI_OPTIMIZATION_PLAN.md §5.1). `score` shows the staff notation; `library`
+ * shows the song list. They are mutually exclusive surfaces of one container —
+ * never stacked. UI-only state: it never touches the note model, matcher,
+ * playback clock, or scoring, and is not persisted.
+ */
+export type PracticeSurface = 'score' | 'library';
+
 export interface DebugSnapshot {
   playheadTime: number;
   lastMidiEvent: string | null;
@@ -42,6 +51,9 @@ interface AppState {
   savedSongs: SongRecord[];
   importError: string | null;
   isLoadingSong: boolean;
+
+  /** Which face of the shared Practice workspace is operable (see PracticeSurface). */
+  practiceSurface: PracticeSurface;
 
   // practice session
   mode: PracticeMode;
@@ -96,6 +108,7 @@ interface AppState {
   loadAttemptHistory(songId: string): Promise<void>;
 
   setMode(mode: PracticeMode): void;
+  setPracticeSurface(surface: PracticeSurface): void;
   play(): Promise<void>;
   pause(): void;
   stop(): void;
@@ -361,6 +374,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   savedSongs: [],
   importError: null,
   isLoadingSong: false,
+  // No reference is loaded at startup, so open on the library face — never an
+  // empty score surface (UI_OPTIMIZATION_PLAN.md §5.1).
+  practiceSurface: 'library',
 
   mode: 'listen',
   transportState: 'idle',
@@ -430,11 +446,15 @@ export const useAppStore = create<AppState>((set, get) => ({
         currentTime: 0,
         lastResult: null,
         isLoadingSong: false,
+        // Stay on the library face so the user sees the new song join the list
+        // and can choose when to practise it (UI_OPTIMIZATION_PLAN.md §5.1).
+        practiceSurface: 'library',
       });
       await get().refreshSavedSongs();
       await get().loadAttemptHistory(performance.id);
     } catch (err) {
       const message = err instanceof MidiImportError ? err.message : 'This file could not be imported.';
+      // Import failure never disturbs the surface in view (UI_OPTIMIZATION_PLAN.md §5.1).
       set({ importError: message, isLoadingSong: false });
     }
   },
@@ -452,6 +472,8 @@ export const useAppStore = create<AppState>((set, get) => ({
         currentTime: 0,
         lastResult: null,
         isLoadingSong: false,
+        // Loading a demo is "practise this now" — flip to the score face.
+        practiceSurface: 'score',
       });
       await get().refreshSavedSongs();
       await get().loadAttemptHistory(performance.id);
@@ -464,7 +486,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     const record = await persistence.getSong(id);
     if (!record) return;
     loadSongIntoEngine(record.performance);
-    set({ song: record.performance, songRecord: record, duration: record.performance.duration, currentTime: 0, lastResult: null });
+    // Choosing a song from the library flips to the score face (UI_OPTIMIZATION_PLAN.md §5.1).
+    set({ song: record.performance, songRecord: record, duration: record.performance.duration, currentTime: 0, lastResult: null, practiceSurface: 'score' });
     await get().loadAttemptHistory(record.performance.id);
   },
 
@@ -479,6 +502,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   setMode(mode) {
     if (get().isAttemptRunning || isRecognitionActive(get())) return;
     set({ mode, waitingForMidi: null });
+  },
+
+  setPracticeSurface(surface) {
+    if (get().practiceSurface === surface) return;
+    set({ practiceSurface: surface });
   },
 
   async play() {
@@ -722,7 +750,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   clearSong() {
     engine.stop();
-    set({ song: null, songRecord: null, duration: 0, currentTime: 0, lastResult: null, lastLearnerPerformance: null, attemptHistory: [], mode: 'listen' });
+    // No song left to notate — fall back to the library face (UI_OPTIMIZATION_PLAN.md §5.1).
+    set({ song: null, songRecord: null, duration: 0, currentTime: 0, lastResult: null, lastLearnerPerformance: null, attemptHistory: [], mode: 'listen', practiceSurface: 'library' });
   },
 }));
 

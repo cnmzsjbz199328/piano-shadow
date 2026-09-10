@@ -1,16 +1,14 @@
-import { useMemo, useState } from 'react';
-import { useAppStore } from '@/stores/useAppStore';
+import { useCallback, useMemo, useState } from 'react';
+import { useAppStore, type PracticeSurface } from '@/stores/useAppStore';
 import { midiToNoteName } from '@/music-model';
 import { TransportControls } from '@/components/transport/TransportControls';
 import { PianoKeyboard } from '@/components/piano/PianoKeyboard';
 import { FallingNotes } from '@/components/piano-roll/FallingNotes';
-import { ScoreView } from '@/components/sheet-music/ScoreView';
-import { PracticeEmptyState } from '@/components/practice/PracticeEmptyState';
+import { ScoreSurface } from '@/components/sheet-music/ScoreSurface';
+import { PracticeWorkspace } from '@/components/practice/PracticeWorkspace';
 import { RecognitionControls } from '@/components/practice/RecognitionControls';
 import { SongLibrary } from '@/components/practice/SongLibrary';
-import { ImportMidiButton } from '@/components/practice/ImportMidiButton';
 import { ScoreCard } from '@/components/feedback/ScoreCard';
-import { ErrorBanner } from '@/components/common/ErrorBanner';
 
 const KEYBOARD_LOW_MIDI = 21;
 const KEYBOARD_HIGH_MIDI = 108;
@@ -42,38 +40,58 @@ export function PracticePage() {
   const isAttemptRunning = useAppStore((s) => s.isAttemptRunning);
   const pressVirtualKey = useAppStore((s) => s.pressVirtualKey);
   const releaseVirtualKey = useAppStore((s) => s.releaseVirtualKey);
+  const practiceSurface = useAppStore((s) => s.practiceSurface);
+  const setPracticeSurface = useAppStore((s) => s.setPracticeSurface);
   const isPlaying = transportState === 'playing' || transportState === 'counting-in';
-  const importError = useAppStore((s) => s.importError);
-  const [notationOpen, setNotationOpen] = useState(false);
+
+  // The flip is transient; while it runs, the switch controls are locked so a
+  // second click can't reverse a turn mid-way (UI_OPTIMIZATION_PLAN.md §5.2).
+  const [isFlipping, setIsFlipping] = useState(false);
+  const requestSurface = useCallback(
+    (next: PracticeSurface) => {
+      if (isFlipping) return;
+      setPracticeSurface(next);
+    },
+    [isFlipping, setPracticeSurface],
+  );
 
   const activeReferenceMidi = useMemo(() => {
     if (!song || !isPlaying) return [];
     return song.notes.filter((n) => currentTime >= n.startTime && currentTime < n.startTime + n.duration).map((n) => n.midi);
   }, [song, currentTime, isPlaying]);
   const focusMidi = recognitionActiveMidi[0] ?? activeReferenceMidi[0] ?? learnerActiveMidi[0] ?? 60;
+  const referenceLabel = activeReferenceMidi.length > 0 ? activeReferenceMidi.map(midiToNoteName).join(' · ') : 'Ready';
 
   return (
     <div className="practice-page">
       <RecognitionControls />
-      {song ? (
-        <>
-          <TransportControls />
-          <div className="practice-note-focus" aria-live="polite">
-            <span className="section-heading__eyebrow">Current reference note</span>
-            <strong>{activeReferenceMidi.length > 0 ? activeReferenceMidi.map(midiToNoteName).join(' · ') : 'Ready'}</strong>
-            <span>Keyboard feedback is the primary visual during practice.</span>
-          </div>
-          <InlinePracticeResult />
-        </>
-      ) : (
-        <PracticeEmptyState />
-      )}
+
+      <TransportControls
+        surface={practiceSurface}
+        onSurfaceChange={requestSurface}
+        surfaceSwitchDisabled={isFlipping}
+      />
+
+      <InlinePracticeResult />
+
+      <PracticeWorkspace
+        surface={practiceSurface}
+        onFlipStateChange={setIsFlipping}
+        score={<ScoreSurface onOpenLibrary={() => requestSurface('library')} />}
+        library={
+          <SongLibrary
+            onReturnToScore={() => requestSurface('score')}
+            canReturnToScore={song != null}
+            busy={isFlipping}
+          />
+        }
+      />
 
       {(isPlaying || isAttemptRunning) && <FallingNotes />}
 
       <div className="keyboard-dock">
         <div className="keyboard-dock__meta">
-          <span>88-key feedback · showing {midiToNoteName(focusMidi)}</span>
+          <span>88-key feedback · reference {referenceLabel} · focus {midiToNoteName(focusMidi)}</span>
           <span className="keyboard-dock__hint">Mouse / touch, or A S D F… on your computer keyboard</span>
         </div>
         <PianoKeyboard
@@ -86,24 +104,6 @@ export function PracticePage() {
           onRelease={releaseVirtualKey}
         />
       </div>
-
-      {song && (
-        <details
-          className="notation-panel"
-          onToggle={(e) => setNotationOpen((e.currentTarget as HTMLDetailsElement).open)}
-        >
-          <summary>Show notation</summary>
-          {notationOpen && <ScoreView />}
-        </details>
-      )}
-
-      {song && (
-        <>
-          {importError && <ErrorBanner message={importError} />}
-          <div className="library-toolbar"><h2>My MIDI songs</h2><ImportMidiButton /></div>
-          <SongLibrary compact />
-        </>
-      )}
     </div>
   );
 }

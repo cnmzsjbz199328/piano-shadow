@@ -129,11 +129,11 @@ describe('ScoreView — imported MIDI', () => {
   });
 
   it('flags truncation when the piece exceeds the measure cap', async () => {
-    // 20 bars of 4/4 at 120 bpm = 40 s; cap is 16 bars.
+    // 80 bars of 4/4 at 120 bpm = 160 s; cap is 64 bars.
     const many: NoteEvent[] = [];
-    for (let bar = 0; bar < 20; bar += 1) many.push(note(60 + (bar % 5), bar * 2, 0.5));
+    for (let bar = 0; bar < 80; bar += 1) many.push(note(60 + (bar % 5), bar * 2, 0.5));
     state.song = midiSong(many);
     render(<ScoreView />);
-    expect(await screen.findByText(/showing the first 16 bars/i)).toBeInTheDocument();
+    expect(await screen.findByText(/showing the first 64 bars/i)).toBeInTheDocument();
   });
 });

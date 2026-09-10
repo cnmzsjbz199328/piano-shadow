@@ -35,8 +35,13 @@ import {
 const REFUSAL_MESSAGE =
   'Notation needs a quantised rhythm — not available for recorded takes yet.';
 
-/** Keep the render bounded — no pagination/engraving for v0.8.0. */
-const MAX_MEASURES = 16;
+/**
+ * Keep the render bounded — still no pagination/engraving. Raised from 16 now
+ * that `ScoreSurface` gives the staves their own vertical scroll viewport
+ * (UI_OPTIMIZATION_PLAN.md §5.3): a longer piece scrolls instead of being
+ * squeezed, but the cap stays finite so one enormous import can't lock the tab.
+ */
+const MAX_MEASURES = 64;
 /** Treble vs. bass split point (middle C). Imported MIDI has no `hand` yet. */
 const MIDDLE_C = 60;
 /** Sixteenth-note grid: quarter beat / 4. */

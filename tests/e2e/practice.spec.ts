@@ -40,9 +40,41 @@ test.describe('Piano Shadow — single-page recognition and practice', () => {
       await page.waitForTimeout(120);
     }
     await page.getByRole('button', { name: /finish practice/i }).click();
-    await expect(page).toHaveURL(/\/practice$/);
+    // Import / practice never leave the single page — the URL stays put ("/").
+    await expect(page).toHaveURL(/\/(practice)?$/);
     await expect(page.getByRole('heading', { name: /^Score \d+$/ })).toBeVisible();
     await expect(page.locator('.count-row')).toBeVisible();
+  });
+
+  test('the Score/Library flip keeps one operable surface and never moves the keyboard dock', async ({ page }) => {
+    await page.goto('/');
+    await page.locator('input[type=file]').setInputFiles({ name: 'Flip stage.mid', mimeType: 'audio/midi', buffer: midiFixture() });
+    await expect(page.getByRole('heading', { name: 'Flip stage' })).toBeVisible();
+
+    // After import the library face is in view with the new song listed.
+    await expect(page.getByRole('heading', { name: 'My MIDI songs' })).toBeVisible();
+    const roundBox = (b: { x: number; y: number; width: number; height: number } | null) =>
+      b && { x: Math.round(b.x), y: Math.round(b.y), width: Math.round(b.width), height: Math.round(b.height) };
+    const dockBefore = roundBox(await page.locator('.keyboard-dock').boundingBox());
+
+    // Choose the song -> the stage flips to the score face.
+    await page.getByRole('button', { name: 'Practice', exact: true }).click();
+    await expect(page.getByRole('region', { name: /sheet music/i })).toBeVisible();
+    // The library list is now behind an inert face — not operable.
+    await expect(page.getByRole('button', { name: 'Practice', exact: true })).toHaveCount(0);
+
+    // Flip back with the header switch; the library face returns.
+    await page.getByRole('button', { name: 'Open the song library' }).click();
+    await expect(page.getByRole('heading', { name: 'My MIDI songs' })).toBeVisible();
+    await expect(page.getByRole('region', { name: /sheet music/i })).toHaveCount(0);
+
+    // And "Back to score" on the library face flips forward again.
+    await page.getByRole('button', { name: 'Back to the score' }).click();
+    await expect(page.getByRole('region', { name: /sheet music/i })).toBeVisible();
+
+    // The keyboard dock never shifted while the stage turned (D-04).
+    const dockAfter = roundBox(await page.locator('.keyboard-dock').boundingBox());
+    expect(dockAfter).toEqual(dockBefore);
   });
 
   test('microphone failure gives a reason and offers MIDI as an alternative', async ({ page }) => {
