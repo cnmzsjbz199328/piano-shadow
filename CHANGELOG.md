@@ -1,5 +1,63 @@
 # Changelog
 
+## v0.4.1 — Live-bug fixes: recognition clock & responsive keyboard (2026-09-10)
+
+Wave 1 of [`doc/` plan `fizzy-honking-heron`](doc/PIANO_SHADOW_GOAL.md) — the two
+defects that surfaced in live testing of the v0.4.0 build, plus the E2E coverage gap
+noted in the v0.4.0 entry. Three independent tracks, disjoint files, merged together.
+
+### Fixed — recognised notes rang forever on playback (Track A)
+
+- `MicrophoneAdapter` timestamped note **onsets** on a buffer-relative value but note
+  **offsets** on the absolute page clock (`performance.now()`), and the store injected
+  no clock — so every recognised note's `duration` was inflated by hundreds to
+  thousands of seconds. On playback the reference synth voice was held almost
+  indefinitely (worst on the final note) and the song's computed length ballooned so
+  playback never auto-stopped.
+- Every note boundary now derives from **one monotonic session clock**: the store
+  injects `() => recognitionTime()` into the adapter, and `poll()` anchors both the
+  onset and every `endActive(...)` on that clock. Recognition sessions longer than
+  ~20 s now get correct onset spacing (the old buffer-relative anchor saturated at the
+  ~20 s rolling-buffer cap).
+- Defense in depth, three independent ceilings: a recognised note's stored duration is
+  clamped to `min(rawSpan, sessionElapsed, 12 s)`; `PlaybackEngine` clamps any
+  scheduled voice to `min(noteDuration, pieceDuration)` and a hard 30 s.
+- New `src/device-adapters/MicrophoneAdapter.test.ts` — fake injected clock + stubbed
+  capture/recognizer; asserts a note still active at `disconnect()` and a note followed
+  by silence both get bounded durations, and onsets stay clock-aligned past the ~20 s
+  horizon.
+
+### Fixed — page scrolled horizontally on small screens (Track C)
+
+- The 88-key keyboard was a fixed ~1352 px SVG with no `overflow-x` clamp on
+  `html/body/#root`, so phones scrolled sideways. The keyboard now **scales to fit the
+  viewport** (not a reduced key range): fluid SVG (`width="100%"`,
+  `preserveAspectRatio="none"`), responsive height `clamp(72px, 14vw, 130px)`, capped
+  at its natural 1352 px width on desktop so large screens are visually unchanged.
+- Key geometry (`buildKeyLayout`, `centreXForMidi`, the width/height constants)
+  extracted to a new pure, React-free `src/components/piano/keyLayout.ts` — no
+  behaviour change; upcoming visual layers can align to the same key x-positions.
+- Safety net: `html, body { overflow-x: clip }` (`clip`, not `hidden`, so
+  `.keyboard-dock` keeps `position: sticky`); `flex-wrap` on the keyboard-dock and
+  recognition toplines; a 2-column score grid under 480 px. The keyboard's internal
+  scroll affordances are retained (a no-op at fit scale; still work if a future caller
+  passes a key range too wide to fit).
+
+### Restored — three route-based E2E regressions (Track G1)
+
+Lost in the v0.4.0 single-page rewrite, re-added to `tests/e2e/practice.spec.ts`
+adapted to the single page: an attempt auto-finishes when the reference reaches its end
+(inline Score card, no "Finish practice" click); Stop rewinds the transport playhead to
+`0:00`; the on-screen keyboard reflects pressed state (`aria-pressed`) with no MIDI
+device connected.
+
+### Engineering
+
+- `.claude` added to the ESLint ignore list so agent worktree build artifacts under
+  `.claude/worktrees/` are never linted.
+- `npm run test` (114), `npm run typecheck`, `npm run lint`, `npm run build`,
+  `npm run test:e2e` (6) all green on the integrated result.
+
 ## v0.4.0 — Single-page recognition & practice (2026-09-08)
 
 Implementation of [`doc/SINGLE_PAGE_RECOGNITION_PLAN.md`](doc/SINGLE_PAGE_RECOGNITION_PLAN.md).
