@@ -1,5 +1,74 @@
 # Changelog
 
+## v0.8.0 — Staff-notation view (2026-09-10)
+
+Wave 3 · Track F. Scope signed off in advance (`doc/ARCHITECTURE.md` →
+"Staff-notation view — scope"): spec §35 forbids *automatic sheet music
+generation*, so this renders **only imported-MIDI `Performance`s** (which already
+carry authored note durations), display-only, no export.
+
+- **`src/components/sheet-music/ScoreView.tsx`** + a pure
+  `secondsToNoteValue.ts` mapper. Behind a default-collapsed **"Show notation"**
+  `<details>` on `PracticePage`, below the keyboard (still the primary visual).
+- Seconds → beats via `song.tempoMap` (first marking); onsets/durations snapped
+  to a 1/16 grid by **reusing** `quantization/quantize.ts`, then bucketed on a
+  log-2 scale to the nearest of 1/1…1/16. Grand staff, split at middle C, first
+  16 bars, with an in-UI caption disclosing the approximation.
+- **Recorded / recognised takes are refused** with *"Notation needs a quantised
+  rhythm — not available for recorded takes yet."* — no audio→notation, no OMR.
+- **Display-only:** reads `song` from the store, never writes back; no editing,
+  no drag, no MIDI/MusicXML/PDF export.
+- `vexflow@^5` is **dynamically imported** inside the render effect, so it lands
+  in its own lazy chunk (`vexflow-*.js`) and never enters the initial bundle —
+  it loads only when the panel is first expanded.
+- **Known approximation (stated in-UI and in code, not claimed as transcription):**
+  one nearest note value per note, no dotted values / ties / tuplets, sharps-only
+  spelling, only the first tempo + time signature honoured.
+- Tests: 9 mapper cases on a 4/4 fixture + 6 component gate/smoke cases.
+
+## v0.7.0 — Per-hand practice + input-latency compensation (2026-09-10)
+
+Wave 3 · Tracks E and G2, merged together.
+
+### Per-hand / per-track practice (Track E)
+
+- **`src/music-model/hands.ts` — `inferHands(notes)`** (pure, deterministic):
+  when a Standard MIDI File supplies ≥2 note tracks, assign `hand` by track
+  (tracks ranked by pitch centroid, lowest → left); otherwise a fixed middle-C
+  (MIDI 60) pitch split. `parseMidiFile` runs it so every imported song's notes
+  carry `hand`.
+- **Both / Left / Right** segmented control in "Practice settings"
+  (`TransportControls`). Selecting a hand re-loads the engine with a **filtered
+  clone** of the reference and rewinds; the same filtered subset feeds the
+  `LiveMatcher` and `evaluatePerformance` in a finished attempt. The filter runs
+  entirely *before* the practice engine — `SequenceAligner` / `evaluatePerformance`
+  stay pure and untouched, and the five score dimensions are unaffected for the
+  notes that remain. Songs with no `hand` data (older imports, recognised takes)
+  fall back to the whole song — the reference is never empty.
+- **Library Export** (`writeMidiFile`) now writes one MIDI track per `hand`
+  group (→ `track` group → single track), so an exported two-hand arrangement
+  re-imports with its hands intact.
+- Tests: `hands.test.ts` (track-split, pitch-split fallback, determinism),
+  `writeMidiFile` multi-track round-trip, a store test that `practiceVoice:'left'`
+  scores only the left-hand reference.
+
+### Input-latency compensation (Track G2)
+
+- **"Input latency compensation (ms)"** on the Experiments page: a fixed scalar
+  (clamped −200…500 ms) subtracted from every recorded learner onset at the one
+  boundary where learner input enters the canonical model — the shared learner
+  clock the input adapters timestamp against (`() => engine.getCurrentTime() -
+  inputLatencyMs / 1000`). It cancels device/OS/audio-scan delay so an on-time
+  performance is graded on-time. Not a new timer; `evaluatePerformance` /
+  `SequenceAligner` untouched.
+- **Persistence schema v2:** `inputLatencyMs` added to `SettingsRecord` /
+  `DEFAULT_SETTINGS` (0); `DB_VERSION` 1→2 with an `upgrade` migration that
+  back-fills the field on an existing settings record without disturbing the
+  others; `loadSettings` also spreads onto `DEFAULT_SETTINGS` as defence in depth.
+- Tests: persistence migration test; a scoring test that a uniform +80 ms shift
+  with `inputLatencyMs = 80` restores an on-time Timing score (and is measurably
+  worse at 0); clamp test.
+
 ## v0.6.0 — Falling-notes guidance layer (2026-09-10)
 
 Wave 2 · Track D of the `fizzy-honking-heron` plan. A "Synthesia"-style visual guide,
