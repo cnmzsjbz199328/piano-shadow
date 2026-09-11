@@ -47,6 +47,10 @@ const MIDDLE_C = 60;
 /** Sixteenth-note grid: quarter beat / 4. */
 const GRID_SUBDIVISION = 4;
 const FALLBACK_WIDTH = 900;
+/** A simple bar should still have a comfortable amount of horizontal air. */
+const MIN_MEASURE_WIDTH = 260;
+/** Maximum number of bars on one system; density can reduce this automatically. */
+const MAX_MEASURES_PER_ROW = 4;
 
 const SHARP_SPELLING = [
   'c',
@@ -93,6 +97,58 @@ interface ScoreModel {
   denominator: number;
   timeSignature: string;
   truncated: boolean;
+}
+
+/**
+ * Estimate the horizontal room a bar needs before VexFlow formats it. The
+ * renderer's old fixed 260px estimate treated a bar of four easy notes and a
+ * bar full of sixteenths, accidentals, and chords as identical. That made the
+ * formatter squeeze the latter until symbols touched one another.
+ */
+function minimumMeasureWidth(measure: Measure): number {
+  return Math.max(
+    MIN_MEASURE_WIDTH,
+    ...[measure.treble, measure.bass].map((ticks) => {
+      const accidentals = ticks.reduce(
+        (count, tick) => count + tick.accidentals.filter(Boolean).length,
+        0,
+      );
+      const largestChord = ticks.reduce((size, tick) => Math.max(size, tick.keys.length), 1);
+      return 190 + ticks.length * 17 + accidentals * 7 + Math.max(0, largestChord - 1) * 14;
+    }),
+  );
+}
+
+interface MeasureRow {
+  measures: Measure[];
+  minimumWidths: number[];
+}
+
+/** Pack bars into systems without allowing dense bars to consume all spacing. */
+function packMeasureRows(measures: Measure[], usableWidth: number): MeasureRow[] {
+  const rows: MeasureRow[] = [];
+  let current: MeasureRow = { measures: [], minimumWidths: [] };
+
+  for (const measure of measures) {
+    const minimumWidth = minimumMeasureWidth(measure);
+    const clefExtra = current.measures.length === 0 ? 64 : 0;
+    const currentWidth = current.minimumWidths.reduce((sum, width) => sum + width, 0);
+    const wouldOverflow =
+      current.measures.length > 0 &&
+      (current.measures.length >= MAX_MEASURES_PER_ROW ||
+        currentWidth + minimumWidth + clefExtra + 64 > usableWidth);
+
+    if (wouldOverflow) {
+      rows.push(current);
+      current = { measures: [], minimumWidths: [] };
+    }
+
+    current.measures.push(measure);
+    current.minimumWidths.push(minimumWidth);
+  }
+
+  if (current.measures.length > 0) rows.push(current);
+  return rows;
 }
 
 /** A rest position that reads cleanly on each clef. */
@@ -274,6 +330,9 @@ interface RenderedScoreNote {
   element: SVGElement;
   startTime: number;
   endTime: number;
+  /** The complete treble+bass system containing this note. */
+  systemRow: number;
+  systemElement?: SVGElement;
 }
 
 interface RenderedScore {
@@ -302,8 +361,18 @@ function updateScoreHighlight(
   });
 
   if (activeIndex !== null && activeIndex !== previousActiveIndex) {
-    rendered.notes[activeIndex]?.element.scrollIntoView?.({
-      block: 'center',
+    // 'nearest' (not 'center') moves the viewport only when the note is
+    // actually out of view. 'center' recomputes a fresh target on every note
+    // change, and since note bounding boxes vary slightly (stem direction,
+    // chord height, accidentals), that produced a visible shake as playback
+    // moved between notes on the same row that were already fully visible.
+    // A chord can have one rendered group in treble and another in bass. Use
+    // the whole system as the scroll target so both parts enter the viewport
+    // together; scrolling to only the first note can leave the lower chord
+    // clipped at the bottom edge.
+    const activeNote = rendered.notes[activeIndex];
+    (activeNote?.systemElement ?? activeNote?.element)?.scrollIntoView?.({
+      block: 'nearest',
       inline: 'nearest',
       behavior: 'smooth',
     });
@@ -318,6 +387,7 @@ function drawVoice(
   ticks: Tick[],
   ink: string,
   clef: 'treble' | 'bass',
+  systemRow: number,
 ): RenderedScoreNote[] {
   const staveNotes = ticks.map((tick) => {
     const staveNote = new VF.StaveNote({
@@ -344,7 +414,9 @@ function drawVoice(
       return [];
     }
     const element = staveNote.getSVGElement();
-    return element ? [{ element, startTime: tick.startTime, endTime: tick.endTime }] : [];
+    return element
+      ? [{ element, startTime: tick.startTime, endTime: tick.endTime, systemRow }]
+      : [];
   });
 }
 
@@ -357,17 +429,23 @@ function renderScore(
 ): RenderedScore {
   host.replaceChildren();
 
-  const width = Math.max(320, containerWidth || FALLBACK_WIDTH);
+  const viewportWidth = Math.max(320, containerWidth || FALLBACK_WIDTH);
   const pad = 10;
   const clefExtra = 64;
   const trebleY = 0;
   const bassY = 92;
   const rowHeight = 210;
 
-  const measuresPerRow = Math.max(1, Math.min(4, Math.floor((width - pad * 2) / 260)));
-  const rowCount = Math.ceil(model.measures.length / measuresPerRow);
-  const usableWidth = width - pad * 2;
-  const totalHeight = rowCount * rowHeight + pad * 2;
+  const usableWidth = viewportWidth - pad * 2;
+  const rows = packMeasureRows(model.measures, usableWidth);
+  const rowWidths = rows.map(
+    (row) => clefExtra + row.minimumWidths.reduce((sum, width) => sum + width, 0),
+  );
+  // A very dense system may be wider than the viewport. The score host already
+  // owns horizontal scrolling, so preserve note spacing instead of shrinking
+  // the notation into collisions.
+  const width = Math.max(viewportWidth, ...rowWidths.map((rowWidth) => rowWidth + pad * 2));
+  const totalHeight = rows.length * rowHeight + pad * 2;
 
   const renderer = new VF.Renderer(host, VF.Renderer.Backends.SVG);
   renderer.resize(width, totalHeight);
@@ -377,12 +455,12 @@ function renderScore(
 
   const renderedNotes: RenderedScoreNote[] = [];
 
-  for (let row = 0; row < rowCount; row += 1) {
-    const rowMeasures = model.measures.slice(
-      row * measuresPerRow,
-      row * measuresPerRow + measuresPerRow,
-    );
-    const perMeasureWidth = (usableWidth - clefExtra) / rowMeasures.length;
+  for (let row = 0; row < rows.length; row += 1) {
+    const layoutRow = rows[row];
+    if (!layoutRow) continue;
+    const rowMeasures = layoutRow.measures;
+    const minimumRowWidth = rowWidths[row] ?? usableWidth;
+    const extraPerMeasure = Math.max(0, usableWidth - minimumRowWidth) / rowMeasures.length;
     const rowTop = pad + row * rowHeight;
     let x = pad;
 
@@ -390,7 +468,8 @@ function renderScore(
       const measure = rowMeasures[mi];
       if (!measure) continue;
       const isRowStart = mi === 0;
-      const staveWidth = isRowStart ? perMeasureWidth + clefExtra : perMeasureWidth;
+      const measureWidth = (layoutRow.minimumWidths[mi] ?? MIN_MEASURE_WIDTH) + extraPerMeasure;
+      const staveWidth = isRowStart ? measureWidth + clefExtra : measureWidth;
 
       const treble = new VF.Stave(x, rowTop + trebleY, staveWidth);
       const bass = new VF.Stave(x, rowTop + bassY, staveWidth);
@@ -418,8 +497,8 @@ function renderScore(
       }
 
       try {
-        renderedNotes.push(...drawVoice(VF, ctx, treble, measure.treble, ink, 'treble'));
-        renderedNotes.push(...drawVoice(VF, ctx, bass, measure.bass, ink, 'bass'));
+        renderedNotes.push(...drawVoice(VF, ctx, treble, measure.treble, ink, 'treble', row));
+        renderedNotes.push(...drawVoice(VF, ctx, bass, measure.bass, ink, 'bass', row));
       } catch {
         // One malformed bar must not blank the whole score; leave the empty
         // stave drawn above and carry on.
@@ -429,6 +508,21 @@ function renderScore(
     }
   }
 
+  const svg = host.querySelector('svg');
+  const systemElements = rows.map((_, row) => {
+    const anchor = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    anchor.setAttribute('class', 'score-system-anchor');
+    anchor.setAttribute('x', String(pad));
+    anchor.setAttribute('y', String(pad + row * rowHeight));
+    anchor.setAttribute('width', String(width - pad * 2));
+    anchor.setAttribute('height', String(rowHeight));
+    anchor.setAttribute('fill', 'transparent');
+    anchor.setAttribute('pointer-events', 'none');
+    anchor.setAttribute('aria-hidden', 'true');
+    svg?.appendChild(anchor);
+    return anchor;
+  });
+
   // Keep the mapping on the rendered SVG instead of rebuilding the notation
   // on every transport tick. CSS can then recolour the whole VexFlow group
   // (notehead, stem, flag and accidental) as one visual unit.
@@ -437,7 +531,12 @@ function renderScore(
     element.dataset.scoreNoteIndex = String(index);
   });
 
-  return { notes: renderedNotes };
+  return {
+    notes: renderedNotes.map((note) => ({
+      ...note,
+      systemElement: systemElements[note.systemRow],
+    })),
+  };
 }
 
 export function ScoreView() {
