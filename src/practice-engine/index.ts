@@ -52,3 +52,13 @@ export {
   type LiveResult,
   type LiveMatcherOptions,
 } from './liveMatcher';
+export {
+  voiceFilteredNotes,
+  voiceFilteredPerformance,
+  groupNotesByOnset,
+  notesInLookAheadWindow,
+  LOOK_AHEAD_SECONDS,
+  noteNames,
+  type PracticeVoice,
+  type OnsetGroup,
+} from './referenceNotes';

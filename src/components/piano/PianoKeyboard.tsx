@@ -38,6 +38,8 @@ interface PianoKeyboardProps {
   heldMidi: readonly number[];
   /** Reference notes currently sounding, e.g. during Listen/Play Along playback. */
   activeReferenceMidi?: readonly number[];
+  /** Most recent learner-input result; reference playback never sets this. */
+  inputFeedback?: { midi: number; result: 'correct' | 'wrong-note' | 'extra' } | null;
   /** Scroll this pitch's octave into view (reference/learner note, or middle C). */
   focusMidi?: number;
   onPress: (midi: number, velocity?: number) => void;
@@ -61,6 +63,7 @@ export function PianoKeyboard({
   highMidi = 108,
   heldMidi,
   activeReferenceMidi = [],
+  inputFeedback = null,
   focusMidi,
   onPress,
   onRelease,
@@ -158,6 +161,7 @@ export function PianoKeyboard({
 
   function keyClass(base: string, midi: number): string {
     if (held.has(midi)) return `${base} piano-key--held`;
+    if (inputFeedback?.midi === midi) return `${base} piano-key--feedback-${inputFeedback.result}`;
     if (active.has(midi)) return `${base} piano-key--reference-active`;
     return base;
   }

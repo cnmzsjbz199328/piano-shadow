@@ -22,6 +22,22 @@ describe('PianoKeyboard', () => {
     expect(screen.getByLabelText('Key 62')).toHaveAttribute('aria-pressed', 'false');
   });
 
+  it('keeps learner feedback visually distinct from reference highlighting', () => {
+    const { container } = render(
+      <PianoKeyboard
+        heldMidi={[]}
+        activeReferenceMidi={[60]}
+        inputFeedback={{ midi: 62, result: 'correct' }}
+        onPress={() => {}}
+        onRelease={() => {}}
+        lowMidi={60}
+        highMidi={64}
+      />,
+    );
+    expect(container.querySelector('.piano-key--reference-active')).not.toBeNull();
+    expect(container.querySelector('.piano-key--feedback-correct')).not.toBeNull();
+  });
+
   it('responds to the computer keyboard shortcut row', () => {
     const onPress = vi.fn();
     const onRelease = vi.fn();

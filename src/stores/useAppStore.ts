@@ -10,7 +10,14 @@ import {
   type AdapterStatus,
   type MidiInputInfo,
 } from '@/device-adapters';
-import { evaluatePerformance, LiveMatcher, type EvaluationResult, type LiveFeedbackItem } from '@/practice-engine';
+import {
+  evaluatePerformance,
+  LiveMatcher,
+  voiceFilteredNotes,
+  voiceFilteredPerformance,
+  type EvaluationResult,
+  type LiveFeedbackItem,
+} from '@/practice-engine';
 import { instrument } from '@/audio-engine';
 import * as persistence from '@/services/persistence';
 import type { AttemptRecord, SettingsRecord, SongRecord } from '@/services/persistence';
@@ -28,6 +35,7 @@ export type PracticeMode = 'listen' | 'play-along' | 'wait';
 
 /** Which hand(s) of the reference to play back and score. */
 export type PracticeVoice = 'both' | 'left' | 'right';
+export type FallingNotesMode = 'guidance' | 'subtle' | 'off';
 
 /**
  * Which face of the shared Practice workspace is currently operable
@@ -67,6 +75,8 @@ interface AppState {
   waitingForMidi: number[] | null;
   learnerActiveMidi: number[];
   liveFeedback: LiveFeedbackItem[];
+  lastInputFeedback: LiveFeedbackItem | null;
+  fallingNotesMode: FallingNotesMode;
 
   // results
   lastResult: EvaluationResult | null;
@@ -120,6 +130,7 @@ interface AppState {
   setShowDebugPanel(on: boolean): void;
   setSoundEnabled(on: boolean): void;
   setPracticeVoice(voice: PracticeVoice): void;
+  setFallingNotesMode(mode: FallingNotesMode): void;
   setInputLatencyMs(ms: number): void;
 
   connectMidi(): Promise<void>;
@@ -161,6 +172,7 @@ const engine = new PlaybackEngine({
     // matcher are left running against a clock the engine has already reset
     // to 0, and any further input would be timestamped near zero.
     if (useAppStore.getState().isAttemptRunning) void useAppStore.getState().finishAttempt(finalTime);
+    else useAppStore.setState({ waitingForMidi: null, liveFeedback: [], lastInputFeedback: null });
   },
 });
 
@@ -306,6 +318,7 @@ function handleLearnerNoteOn(midi: number, velocity: number | undefined, label: 
     });
     useAppStore.setState((s) => ({
       liveFeedback: [item, ...s.liveFeedback].slice(0, 8),
+      lastInputFeedback: item,
       debug: { ...s.debug, lastMatchingDecisions: [item, ...s.debug.lastMatchingDecisions].slice(0, 8) },
     }));
   }
@@ -337,33 +350,9 @@ midiAdapter.onNoteStart((n) => handleLearnerNoteOn(n.midi, n.velocity, `midi not
 midiAdapter.onNoteEnd((n) => handleLearnerNoteOff(n.midi));
 midiAdapter.onStatusChange((status) => useAppStore.setState({ midiStatus: status }));
 
-// --- per-hand practice ---
-// The reference-note filter for `practiceVoice` happens HERE, before any call
-// into the playback engine or `evaluatePerformance`. Those stay pure consumers
-// of `NoteEvent[]`; the sequence aligner never sees a gap it would have to
-// index-match around (spec §5, §25).
-
-/**
- * The reference notes for the selected voice. 'both' is the whole song. A song
- * with no `hand` data (older imports, recognised takes) has nothing matching a
- * single hand, so an empty filter falls back to the full song rather than
- * leaving the engine / scorer with nothing to work on.
- */
-function voiceFilteredNotes(song: Performance, voice: PracticeVoice): NoteEvent[] {
-  if (voice === 'both') return song.notes;
-  const filtered = song.notes.filter((n) => n.hand === voice);
-  return filtered.length > 0 ? filtered : song.notes;
-}
-
-/** A shallow `Performance` clone carrying only the selected voice's notes and the
- *  song's original `duration` (choosing a hand never changes the timeline length). */
-function voiceFilteredSong(song: Performance, voice: PracticeVoice): Performance {
-  return voice === 'both' ? song : { ...song, notes: voiceFilteredNotes(song, voice) };
-}
-
 /** Load a song into the playback engine, honouring the current practice voice. */
 function loadSongIntoEngine(song: Performance): void {
-  engine.load(voiceFilteredSong(song, useAppStore.getState().practiceVoice));
+  engine.load(voiceFilteredPerformance(song, useAppStore.getState().practiceVoice));
 }
 
 // --- store ---
@@ -389,6 +378,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   waitingForMidi: null,
   learnerActiveMidi: [],
   liveFeedback: [],
+  lastInputFeedback: null,
+  fallingNotesMode: 'guidance',
 
   lastResult: null,
   lastLearnerPerformance: null,
@@ -445,6 +436,9 @@ export const useAppStore = create<AppState>((set, get) => ({
         duration: performance.duration,
         currentTime: 0,
         lastResult: null,
+        waitingForMidi: null,
+        liveFeedback: [],
+        lastInputFeedback: null,
         isLoadingSong: false,
         // Stay on the library face so the user sees the new song join the list
         // and can choose when to practise it (UI_OPTIMIZATION_PLAN.md §5.1).
@@ -471,6 +465,9 @@ export const useAppStore = create<AppState>((set, get) => ({
         duration: performance.duration,
         currentTime: 0,
         lastResult: null,
+        waitingForMidi: null,
+        liveFeedback: [],
+        lastInputFeedback: null,
         isLoadingSong: false,
         // Loading a demo is "practise this now" — flip to the score face.
         practiceSurface: 'score',
@@ -487,7 +484,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (!record) return;
     loadSongIntoEngine(record.performance);
     // Choosing a song from the library flips to the score face (UI_OPTIMIZATION_PLAN.md §5.1).
-    set({ song: record.performance, songRecord: record, duration: record.performance.duration, currentTime: 0, lastResult: null, practiceSurface: 'score' });
+    set({ song: record.performance, songRecord: record, duration: record.performance.duration, currentTime: 0, lastResult: null, waitingForMidi: null, liveFeedback: [], lastInputFeedback: null, practiceSurface: 'score' });
     await get().loadAttemptHistory(record.performance.id);
   },
 
@@ -501,7 +498,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   setMode(mode) {
     if (get().isAttemptRunning || isRecognitionActive(get())) return;
-    set({ mode, waitingForMidi: null });
+    set({ mode, waitingForMidi: null, liveFeedback: [], lastInputFeedback: null });
   },
 
   setPracticeSurface(surface) {
@@ -518,16 +515,16 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   stop() {
     engine.stop();
-    set({ waitingForMidi: null });
+    set({ waitingForMidi: null, liveFeedback: [], lastInputFeedback: null });
   },
   restart() {
     if (!canStartPlayback()) return;
     engine.restart();
-    set({ waitingForMidi: null });
+    set({ waitingForMidi: null, liveFeedback: [], lastInputFeedback: null });
   },
   seek(seconds) {
     engine.seek(seconds);
-    set({ currentTime: engine.getCurrentTime() });
+    set({ currentTime: engine.getCurrentTime(), waitingForMidi: null, liveFeedback: [], lastInputFeedback: null });
   },
 
   setTempoScale(scale) {
@@ -564,7 +561,10 @@ export const useAppStore = create<AppState>((set, get) => ({
     // Re-load the filtered reference and rewind — the engine now holds only the
     // chosen hand's notes. In-memory only; not persisted.
     loadSongIntoEngine(song);
-    set({ currentTime: 0 });
+    set({ currentTime: 0, waitingForMidi: null, liveFeedback: [], lastInputFeedback: null });
+  },
+  setFallingNotesMode(mode) {
+    set({ fallingNotesMode: mode });
   },
   setInputLatencyMs(ms) {
     const safe = Number.isFinite(ms) ? ms : 0;
@@ -609,7 +609,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     recorder.attach(midiAdapter);
     recorder.start();
     liveMatcher = new LiveMatcher(voiceFilteredNotes(song, practiceVoice));
-    set({ isAttemptRunning: true, liveFeedback: [], lastResult: null, waitingForMidi: null });
+    set({ isAttemptRunning: true, liveFeedback: [], lastInputFeedback: null, lastResult: null, waitingForMidi: null });
   },
 
   async finishAttempt(atTime) {
@@ -624,7 +624,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     // Score the learner against only the hand(s) they chose to practise. The
     // filter is applied here, before the pure `evaluatePerformance` call.
     const result = evaluatePerformance(voiceFilteredNotes(song, practiceVoice), learnerPerformance.notes);
-    set({ isAttemptRunning: false, waitingForMidi: null, lastResult: result, lastLearnerPerformance: learnerPerformance });
+    set({ isAttemptRunning: false, waitingForMidi: null, liveFeedback: [], lastInputFeedback: null, lastResult: result, lastLearnerPerformance: learnerPerformance });
 
     await persistence.saveAttempt({
       songId: song.id,
@@ -751,7 +751,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   clearSong() {
     engine.stop();
     // No song left to notate — fall back to the library face (UI_OPTIMIZATION_PLAN.md §5.1).
-    set({ song: null, songRecord: null, duration: 0, currentTime: 0, lastResult: null, lastLearnerPerformance: null, attemptHistory: [], mode: 'listen', practiceSurface: 'library' });
+    set({ song: null, songRecord: null, duration: 0, currentTime: 0, lastResult: null, lastLearnerPerformance: null, attemptHistory: [], mode: 'listen', practiceSurface: 'library', waitingForMidi: null, liveFeedback: [], lastInputFeedback: null });
   },
 }));
 

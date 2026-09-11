@@ -105,7 +105,10 @@ export function PracticeWorkspace({
       // Focus lands only once both faces have stopped moving, so a screen
       // reader never reads across two lists mid-turn (§5.2, §8).
       const activeFace = surface === 'score' ? scoreFaceRef.current : libraryFaceRef.current;
-      activeFace?.querySelector<HTMLElement>('[data-workspace-heading]')?.focus();
+      // The keyboard dock is a sticky sibling below the stage. Moving focus
+      // must not make the browser scroll the page and visually detach that
+      // dock from the guidance layer after a surface flip.
+      activeFace?.querySelector<HTMLElement>('[data-workspace-heading]')?.focus({ preventScroll: true });
     };
 
     if (instantRef.current) {

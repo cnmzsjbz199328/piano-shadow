@@ -159,18 +159,27 @@ test.describe('Piano Shadow — focused practice workspace', () => {
     await page.locator('input[type=file]').setInputFiles({ name: 'Falling notes.mid', mimeType: 'audio/midi', buffer: midiFixture() });
     await expect(page.getByRole('heading', { name: 'Falling notes' })).toBeVisible();
 
-    // Not mounted before a session is running.
+    // The score face previews the first target before a session is running;
+    // the library face keeps the guidance surface out of view.
     await expect(page.locator('.falling-notes')).toHaveCount(0);
 
     await page.getByRole('button', { name: 'Practice', exact: true }).click();
+    await page.getByText('Practice settings', { exact: false }).click();
+    await expect(page.getByRole('button', { name: 'Guidance', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await page.getByRole('button', { name: 'Off', exact: true }).click();
+    await expect(page.locator('.falling-notes')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Guidance', exact: true }).click();
+    await expect(page.locator('.falling-notes')).toBeVisible();
     await page.getByRole('button', { name: /start practice/i }).click();
     await page.getByRole('button', { name: /play$/i }).click();
 
     // The guidance canvas is mounted directly above the keyboard dock while the transport runs.
     await expect(page.locator('.falling-notes__canvas')).toBeVisible();
 
-    // The fixture auto-finishes at the reference end; the layer unmounts with the session.
+    // The fixture auto-finishes at the reference end; the layer returns to its
+    // frozen preview rather than retaining an old success/target state.
     await expect(page.getByRole('heading', { name: /^Score \d+$/ })).toBeVisible({ timeout: 15000 });
-    await expect(page.locator('.falling-notes')).toHaveCount(0);
+    await expect(page.locator('.falling-notes')).toBeVisible();
+    await expect(page.getByText(/Current target|Next/)).toBeVisible();
   });
 });

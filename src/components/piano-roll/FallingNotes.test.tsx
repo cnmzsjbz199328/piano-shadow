@@ -12,6 +12,10 @@ const { state } = vi.hoisted(() => ({
     currentTime: 0,
     transportState: 'playing' as string,
     isAttemptRunning: true,
+    practiceVoice: 'both' as const,
+    waitingForMidi: null as number[] | null,
+    fallingNotesMode: 'guidance' as const,
+    lastInputFeedback: null,
   },
 }));
 
@@ -87,6 +91,10 @@ beforeEach(() => {
   state.currentTime = 0;
   state.transportState = 'playing';
   state.isAttemptRunning = true;
+  state.practiceVoice = 'both';
+  state.waitingForMidi = null;
+  state.fallingNotesMode = 'guidance';
+  state.lastInputFeedback = null;
 
   ctx = fakeCtx();
   stubCanvasContext(ctx);
@@ -140,14 +148,14 @@ describe('FallingNotes', () => {
     expect(ctx.fillRect).not.toHaveBeenCalled();
   });
 
-  it('paints nothing while the transport is idle (defensive: not an active session)', () => {
+  it('keeps the first target visible while the transport is idle for preview', () => {
     state.song = song([note(60, 0.5)]);
     state.currentTime = 0;
     state.transportState = 'stopped';
     state.isAttemptRunning = false;
     render(<FallingNotes />);
     expect(ctx.clearRect).toHaveBeenCalled();
-    expect(ctx.fillRect).not.toHaveBeenCalled();
+    expect(ctx.fillRect).toHaveBeenCalled();
   });
 
   it('renders static markers (no throw) when prefers-reduced-motion is set', () => {
@@ -156,6 +164,16 @@ describe('FallingNotes', () => {
     state.currentTime = 0.1;
     expect(() => render(<FallingNotes />)).not.toThrow();
     expect(ctx.fillRect).toHaveBeenCalled();
+  });
+
+  it('keeps a waiting chord on one static layer and only uses remaining targets', () => {
+    stubReducedMotion(true);
+    state.song = song([note(60, 0), note(64, 0), note(67, 0), note(72, 1)]);
+    state.currentTime = 0;
+    state.waitingForMidi = [60, 67];
+    render(<FallingNotes />);
+    const yPositions = ctx.fillRect.mock.calls.map((call) => call[1]).filter((y) => y === 78);
+    expect(yPositions).toHaveLength(2);
   });
 
   it('no-ops (does not throw) when the canvas has no 2D context', () => {
