@@ -90,13 +90,12 @@ export function PracticePage() {
         surfaceSwitchDisabled={isFlipping}
       />
 
-      {song && (
+      {song && (mode === 'play-along' || mode === 'wait') && liveFeedback.length > 0 && (
         <section
           className="practice-live-feedback"
           aria-label="Live practice feedback"
-          aria-hidden={mode !== 'play-along' && mode !== 'wait' ? 'true' : undefined}
         >
-          {(mode === 'play-along' || mode === 'wait') && <LiveFeedback items={liveFeedback} />}
+          <LiveFeedback items={liveFeedback} />
         </section>
       )}
 
