@@ -14,6 +14,7 @@ import {
   BLACK_WIDTH,
   WHITE_HEIGHT,
   BLACK_HEIGHT,
+  LABEL_ROW_HEIGHT,
 } from './keyLayout';
 
 /**
@@ -38,6 +39,14 @@ interface PianoKeyboardProps {
   heldMidi: readonly number[];
   /** Reference notes currently sounding, e.g. during Listen/Play Along playback. */
   activeReferenceMidi?: readonly number[];
+  /** Notes the learner should play right now; labelled above the key in
+   *  addition to any fill from `activeReferenceMidi` (the two overlap during
+   *  guided playback, but stay separate props since recognition mode fills
+   *  keys without this "you should play this" framing). */
+  currentTargetMidi?: readonly number[];
+  /** The following onset group; labelled only, never filled — a filled key
+   *  would read as "play this now" and be confused with the current target. */
+  nextTargetMidi?: readonly number[];
   /** Most recent learner-input result; reference playback never sets this. */
   inputFeedback?: { midi: number; result: 'correct' | 'wrong-note' | 'extra' } | null;
   /** Scroll this pitch's octave into view (reference/learner note, or middle C). */
@@ -63,6 +72,8 @@ export function PianoKeyboard({
   highMidi = 108,
   heldMidi,
   activeReferenceMidi = [],
+  currentTargetMidi = [],
+  nextTargetMidi = [],
   inputFeedback = null,
   focusMidi,
   onPress,
@@ -72,6 +83,31 @@ export function PianoKeyboard({
   const layout = useMemo(() => buildKeyLayout(lowMidi, highMidi), [lowMidi, highMidi]);
   const held = useMemo(() => new Set(heldMidi), [heldMidi]);
   const active = useMemo(() => new Set(activeReferenceMidi), [activeReferenceMidi]);
+  // True visual centre of each key (unlike `centreXForMidi`, which is only a
+  // scroll-into-view approximation), so a target label sits over the actual
+  // key it names, black keys included.
+  const centreByMidi = useMemo(() => {
+    const map = new Map<number, number>();
+    for (const w of layout.whites) map.set(w.midi, w.x + WHITE_WIDTH / 2);
+    for (const b of layout.blacks) map.set(b.midi, b.x + BLACK_WIDTH / 2);
+    return map;
+  }, [layout]);
+  // 'current' wins where a note is (harmlessly) listed in both — it is the
+  // more urgent of the two labels.
+  const targetLabelKind = useMemo(() => {
+    const labels = new Map<number, 'current' | 'next'>();
+    for (const midi of nextTargetMidi) labels.set(midi, 'next');
+    for (const midi of currentTargetMidi) labels.set(midi, 'current');
+    return labels;
+  }, [currentTargetMidi, nextTargetMidi]);
+  // The target labels are visual (`aria-hidden`, drawn on the keys); this is
+  // the equivalent announcement for screen-reader users.
+  const targetAnnouncement = useMemo(() => {
+    const parts: string[] = [];
+    if (currentTargetMidi.length > 0) parts.push(`Current target ${currentTargetMidi.map(midiToNoteName).join(', ')}`);
+    if (nextTargetMidi.length > 0) parts.push(`next ${nextTargetMidi.map(midiToNoteName).join(', ')}`);
+    return parts.join('. ');
+  }, [currentTargetMidi, nextTargetMidi]);
   const [octaveShift, setOctaveShift] = useState(0);
   const [overflowing, setOverflowing] = useState(false);
   const keyToMidi = useRef(new Map<string, number>());
@@ -168,6 +204,7 @@ export function PianoKeyboard({
 
   return (
     <div className="piano-keyboard-wrap">
+      <span className="sr-only" role="status" aria-live="polite">{targetAnnouncement}</span>
       {overflowing && (
         <button
           type="button"
@@ -182,8 +219,8 @@ export function PianoKeyboard({
       <div className="piano-keyboard" ref={scrollRef}>
         <svg
           width="100%"
-          height={WHITE_HEIGHT}
-          viewBox={`0 0 ${layout.totalWidth} ${WHITE_HEIGHT}`}
+          height={LABEL_ROW_HEIGHT + WHITE_HEIGHT}
+          viewBox={`0 0 ${layout.totalWidth} ${LABEL_ROW_HEIGHT + WHITE_HEIGHT}`}
           preserveAspectRatio="none"
           role="group"
           aria-label="Virtual piano keyboard"
@@ -196,7 +233,7 @@ export function PianoKeyboard({
               <rect
                 className={keyClass('piano-key piano-key--white', midi)}
                 x={x}
-                y={0}
+                y={LABEL_ROW_HEIGHT}
                 width={WHITE_WIDTH}
                 height={WHITE_HEIGHT}
                 role="button"
@@ -206,7 +243,7 @@ export function PianoKeyboard({
                 {...keyHandlers(midi)}
               />
               {showLabel && (
-                <text className="piano-key__label" x={x + WHITE_WIDTH / 2} y={WHITE_HEIGHT - 8} textAnchor="middle">
+                <text className="piano-key__label" x={x + WHITE_WIDTH / 2} y={LABEL_ROW_HEIGHT + WHITE_HEIGHT - 8} textAnchor="middle">
                   {name}
                 </text>
               )}
@@ -218,7 +255,7 @@ export function PianoKeyboard({
             key={midi}
             className={keyClass('piano-key piano-key--black', midi)}
             x={x}
-            y={0}
+            y={LABEL_ROW_HEIGHT}
             width={BLACK_WIDTH}
             height={BLACK_HEIGHT}
             role="button"
@@ -228,6 +265,22 @@ export function PianoKeyboard({
             {...keyHandlers(midi)}
           />
         ))}
+        {[...targetLabelKind.entries()].map(([midi, kind]) => {
+          const centreX = centreByMidi.get(midi);
+          if (centreX === undefined) return null;
+          return (
+            <text
+              key={`target-${midi}`}
+              className={`piano-key__target-label piano-key__target-label--${kind}`}
+              x={centreX}
+              y={LABEL_ROW_HEIGHT - 3}
+              textAnchor="middle"
+              aria-hidden="true"
+            >
+              {midiToNoteName(midi)}
+            </text>
+          );
+        })}
         </svg>
       </div>
       {overflowing && (

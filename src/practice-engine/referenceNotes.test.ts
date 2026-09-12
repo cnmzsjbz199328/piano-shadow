@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { NoteEvent, Performance } from '@/music-model';
-import { groupNotesByOnset, notesInLookAheadWindow, voiceFilteredNotes } from './referenceNotes';
+import { currentOnsetGroup, groupNotesByOnset, nextOnsetGroup, voiceFilteredNotes } from './referenceNotes';
 
 function note(id: string, midi: number, startTime: number, hand?: 'left' | 'right', duration = 0.25): NoteEvent {
   return { id, midi, noteName: '', startTime, duration, source: 'midi-file', hand };
@@ -30,12 +30,20 @@ describe('shared reference-note selectors', () => {
     expect(groups[1]!.notes.map((item) => item.id)).toEqual(['arpeggio']);
   });
 
-  it('keeps a sustain crossing the window boundary while excluding distant notes', () => {
-    const visible = notesInLookAheadWindow([
-      note('sustain', 48, -10, undefined, 11),
-      note('near', 60, 2.49),
-      note('far', 64, 2.51),
-    ], 0);
-    expect(visible.map((item) => item.id)).toEqual(['sustain', 'near']);
+  it('treats a still-sustaining earlier chord as current, and finds the following group as next', () => {
+    const notes = [
+      note('sustain', 48, 0, undefined, 5),
+      note('chordRoot', 60, 1),
+      note('chordThird', 64, 1),
+      note('after', 67, 2),
+    ];
+    expect(currentOnsetGroup(notes, 1).map((item) => item.id)).toEqual(['chordRoot', 'chordThird']);
+    expect(nextOnsetGroup(notes, 1).map((item) => item.id)).toEqual(['after']);
+  });
+
+  it('finds nothing current before the first onset, and nothing next after the last', () => {
+    const notes = [note('only', 60, 1)];
+    expect(currentOnsetGroup(notes, 0)).toEqual([]);
+    expect(nextOnsetGroup(notes, 1)).toEqual([]);
   });
 });

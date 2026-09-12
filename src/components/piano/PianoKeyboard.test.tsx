@@ -38,6 +38,33 @@ describe('PianoKeyboard', () => {
     expect(container.querySelector('.piano-key--feedback-correct')).not.toBeNull();
   });
 
+  it('labels the current and next target notes directly on the keys, current taking priority on overlap', () => {
+    const { container } = render(
+      <PianoKeyboard
+        heldMidi={[]}
+        currentTargetMidi={[60, 61]}
+        nextTargetMidi={[61, 64]}
+        onPress={() => {}}
+        onRelease={() => {}}
+        lowMidi={60}
+        highMidi={64}
+      />,
+    );
+    const current = [...container.querySelectorAll('.piano-key__target-label--current')].map((el) => el.textContent);
+    const next = [...container.querySelectorAll('.piano-key__target-label--next')].map((el) => el.textContent);
+    expect(current).toEqual(expect.arrayContaining(['C4', 'C#4']));
+    expect(next).toEqual(['E4']);
+    expect(screen.getByRole('status')).toHaveTextContent('Current target C4, C#4. next C#4, E4');
+  });
+
+  it('renders no target labels or announcement when nothing is targeted', () => {
+    const { container } = render(
+      <PianoKeyboard heldMidi={[]} onPress={() => {}} onRelease={() => {}} lowMidi={60} highMidi={64} />,
+    );
+    expect(container.querySelector('.piano-key__target-label')).toBeNull();
+    expect(screen.getByRole('status')).toHaveTextContent('');
+  });
+
   it('responds to the computer keyboard shortcut row', () => {
     const onPress = vi.fn();
     const onRelease = vi.fn();

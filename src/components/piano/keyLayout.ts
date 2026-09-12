@@ -21,6 +21,8 @@ export const BLACK_WIDTH = 16;
 export const WHITE_HEIGHT = 130;
 /** Black-key height in viewBox units. */
 export const BLACK_HEIGHT = 82;
+/** Reserved strip above the keys for current/next target note-name labels. */
+export const LABEL_ROW_HEIGHT = 13;
 
 export interface KeyLayout {
   whites: Array<{ midi: number; x: number }>;

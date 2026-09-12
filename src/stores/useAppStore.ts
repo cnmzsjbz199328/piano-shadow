@@ -35,7 +35,6 @@ export type PracticeMode = 'listen' | 'play-along' | 'wait';
 
 /** Which hand(s) of the reference to play back and score. */
 export type PracticeVoice = 'both' | 'left' | 'right';
-export type FallingNotesMode = 'guidance' | 'subtle' | 'off';
 
 /**
  * Which face of the shared Practice workspace is currently operable
@@ -76,7 +75,6 @@ interface AppState {
   learnerActiveMidi: number[];
   liveFeedback: LiveFeedbackItem[];
   lastInputFeedback: LiveFeedbackItem | null;
-  fallingNotesMode: FallingNotesMode;
 
   // results
   lastResult: EvaluationResult | null;
@@ -130,7 +128,6 @@ interface AppState {
   setShowDebugPanel(on: boolean): void;
   setSoundEnabled(on: boolean): void;
   setPracticeVoice(voice: PracticeVoice): void;
-  setFallingNotesMode(mode: FallingNotesMode): void;
   setInputLatencyMs(ms: number): void;
 
   connectMidi(): Promise<void>;
@@ -379,7 +376,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   learnerActiveMidi: [],
   liveFeedback: [],
   lastInputFeedback: null,
-  fallingNotesMode: 'guidance',
 
   lastResult: null,
   lastLearnerPerformance: null,
@@ -562,9 +558,6 @@ export const useAppStore = create<AppState>((set, get) => ({
     // chosen hand's notes. In-memory only; not persisted.
     loadSongIntoEngine(song);
     set({ currentTime: 0, waitingForMidi: null, liveFeedback: [], lastInputFeedback: null });
-  },
-  setFallingNotesMode(mode) {
-    set({ fallingNotesMode: mode });
   },
   setInputLatencyMs(ms) {
     const safe = Number.isFinite(ms) ? ms : 0;

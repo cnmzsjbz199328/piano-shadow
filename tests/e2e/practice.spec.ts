@@ -152,34 +152,33 @@ test.describe('Piano Shadow — focused practice workspace', () => {
     await expect(middleC).toHaveAttribute('aria-pressed', 'false');
   });
 
-  // --- Falling-notes guidance layer (plan Track D) ---
+  // --- Current/next target note-name labels, drawn on the keyboard itself ---
 
-  test('the falling-notes guidance layer appears on Play and clears when practice ends', async ({ page }) => {
+  test('labels the current and next target note names on the keyboard keys, current only while on the score face', async ({ page }) => {
     await page.goto('/');
     await page.locator('input[type=file]').setInputFiles({ name: 'Falling notes.mid', mimeType: 'audio/midi', buffer: midiFixture() });
     await expect(page.getByRole('heading', { name: 'Falling notes' })).toBeVisible();
 
-    // The score face previews the first target before a session is running;
-    // the library face keeps the guidance surface out of view.
-    await expect(page.locator('.falling-notes')).toHaveCount(0);
+    // Nothing to target before a song is open for practice.
+    await expect(page.locator('.piano-key__target-label')).toHaveCount(0);
 
     await page.getByRole('button', { name: 'Practice', exact: true }).click();
-    await page.getByText('Practice settings', { exact: false }).click();
-    await expect(page.getByRole('button', { name: 'Guidance', exact: true })).toHaveAttribute('aria-pressed', 'true');
-    await page.getByRole('button', { name: 'Off', exact: true }).click();
-    await expect(page.locator('.falling-notes')).toHaveCount(0);
-    await page.getByRole('button', { name: 'Guidance', exact: true }).click();
-    await expect(page.locator('.falling-notes')).toBeVisible();
+    // Score face previews the first note as the current target before playback starts.
+    await expect(page.locator('.piano-key__target-label--current')).toHaveText('C4');
+    await expect(page.locator('.piano-key__target-label--next')).toHaveText('D4');
+
+    // Flipping to the library face hides the labels without moving the keyboard.
+    await page.getByRole('button', { name: 'Open the song library' }).click();
+    await expect(page.locator('.piano-key__target-label')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Show the score' }).click();
+
     await page.getByRole('button', { name: /start practice/i }).click();
     await page.getByRole('button', { name: /play$/i }).click();
+    await expect(page.locator('.piano-key__target-label--current')).toHaveText('C4');
 
-    // The guidance canvas is mounted directly above the keyboard dock while the transport runs.
-    await expect(page.locator('.falling-notes__canvas')).toBeVisible();
-
-    // The fixture auto-finishes at the reference end; the layer returns to its
-    // frozen preview rather than retaining an old success/target state.
+    // The fixture auto-finishes at the reference end; the current target
+    // returns to a static preview rather than a stale in-progress note.
     await expect(page.getByRole('heading', { name: /^Score \d+$/ })).toBeVisible({ timeout: 15000 });
-    await expect(page.locator('.falling-notes')).toBeVisible();
-    await expect(page.getByText(/Current target|Next/)).toBeVisible();
+    await expect(page.locator('.piano-key__target-label--current')).toHaveText('C4');
   });
 });

@@ -1,9 +1,8 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useAppStore, type PracticeSurface } from '@/stores/useAppStore';
-import { voiceFilteredNotes } from '@/practice-engine';
+import { currentOnsetGroup, nextOnsetGroup, voiceFilteredNotes } from '@/practice-engine';
 import { TransportControls } from '@/components/transport/TransportControls';
 import { PianoKeyboard } from '@/components/piano/PianoKeyboard';
-import { FallingNotes } from '@/components/piano-roll/FallingNotes';
 import { ScoreSurface } from '@/components/sheet-music/ScoreSurface';
 import { PracticeWorkspace } from '@/components/practice/PracticeWorkspace';
 import { SongLibrary } from '@/components/practice/SongLibrary';
@@ -39,14 +38,11 @@ export function PracticePage() {
   const practiceVoice = useAppStore((s) => s.practiceVoice);
   const waitingForMidi = useAppStore((s) => s.waitingForMidi);
   const lastInputFeedback = useAppStore((s) => s.lastInputFeedback);
-  const fallingNotesMode = useAppStore((s) => s.fallingNotesMode);
   const pressVirtualKey = useAppStore((s) => s.pressVirtualKey);
   const releaseVirtualKey = useAppStore((s) => s.releaseVirtualKey);
   const practiceSurface = useAppStore((s) => s.practiceSurface);
   const setPracticeSurface = useAppStore((s) => s.setPracticeSurface);
   const isPlaying = transportState === 'playing' || transportState === 'counting-in';
-  const showFallingNotes = song != null && practiceSurface === 'score' && fallingNotesMode !== 'off';
-  const reserveFallingNotes = song != null && practiceSurface === 'library' && fallingNotesMode !== 'off';
 
   // The flip is transient; while it runs, the switch controls are locked so a
   // second click can't reverse a turn mid-way (UI_OPTIMIZATION_PLAN.md §5.2).
@@ -59,12 +55,29 @@ export function PracticePage() {
     [isFlipping, setPracticeSurface],
   );
 
+  const referenceNotes = useMemo(() => (song ? voiceFilteredNotes(song, practiceVoice) : []), [song, practiceVoice]);
   const activeReferenceMidi = useMemo(() => {
-    if (!song || !isPlaying) return [];
-    return voiceFilteredNotes(song, practiceVoice).filter((n) => currentTime >= n.startTime && currentTime < n.startTime + n.duration).map((n) => n.midi);
-  }, [song, currentTime, isPlaying, practiceVoice]);
+    if (!isPlaying) return [];
+    return referenceNotes.filter((n) => currentTime >= n.startTime && currentTime < n.startTime + n.duration).map((n) => n.midi);
+  }, [referenceNotes, currentTime, isPlaying]);
   const targetMidi = waitingForMidi ?? activeReferenceMidi;
   const focusMidi = recognitionActiveMidi[0] ?? targetMidi[0] ?? learnerActiveMidi[0] ?? 60;
+
+  // Guidance labels (current/next note names on the keys themselves): only on
+  // the score face, so flipping to the library face doesn't distract with
+  // targets for a song the learner isn't looking at. `PianoKeyboard` reserves
+  // the label row's height unconditionally, so this never moves the keyboard.
+  const showGuidance = song != null && practiceSurface === 'score';
+  const currentTargetMidi = useMemo(() => {
+    if (!showGuidance) return [];
+    if (waitingForMidi && waitingForMidi.length > 0) return waitingForMidi;
+    return currentOnsetGroup(referenceNotes, currentTime).map((n) => n.midi);
+  }, [showGuidance, waitingForMidi, referenceNotes, currentTime]);
+  const nextTargetMidi = useMemo(() => {
+    if (!showGuidance) return [];
+    const next = nextOnsetGroup(referenceNotes, currentTime).map((n) => n.midi);
+    return next.filter((midi) => !currentTargetMidi.includes(midi));
+  }, [showGuidance, referenceNotes, currentTime, currentTargetMidi]);
 
   return (
     <div className="practice-page">
@@ -89,22 +102,19 @@ export function PracticePage() {
         }
       />
 
-      <div className="practice-keyboard-zone" data-falling-mode={fallingNotesMode}>
-        {showFallingNotes && <FallingNotes />}
-        {reserveFallingNotes && <div className="falling-notes-reserve" aria-hidden="true" />}
-
-        <div className="keyboard-dock">
-          <PianoKeyboard
-            lowMidi={KEYBOARD_LOW_MIDI}
-            highMidi={KEYBOARD_HIGH_MIDI}
-            focusMidi={focusMidi}
-            heldMidi={learnerActiveMidi}
-            activeReferenceMidi={song && (isPlaying || waitingForMidi) ? targetMidi : recognitionActiveMidi}
-            inputFeedback={lastInputFeedback ? { midi: lastInputFeedback.actual.midi, result: lastInputFeedback.result } : null}
-            onPress={pressVirtualKey}
-            onRelease={releaseVirtualKey}
-          />
-        </div>
+      <div className="keyboard-dock">
+        <PianoKeyboard
+          lowMidi={KEYBOARD_LOW_MIDI}
+          highMidi={KEYBOARD_HIGH_MIDI}
+          focusMidi={focusMidi}
+          heldMidi={learnerActiveMidi}
+          activeReferenceMidi={song && (isPlaying || waitingForMidi) ? targetMidi : recognitionActiveMidi}
+          currentTargetMidi={currentTargetMidi}
+          nextTargetMidi={nextTargetMidi}
+          inputFeedback={lastInputFeedback ? { midi: lastInputFeedback.actual.midi, result: lastInputFeedback.result } : null}
+          onPress={pressVirtualKey}
+          onRelease={releaseVirtualKey}
+        />
       </div>
     </div>
   );

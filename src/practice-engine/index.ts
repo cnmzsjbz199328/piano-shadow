@@ -56,9 +56,9 @@ export {
   voiceFilteredNotes,
   voiceFilteredPerformance,
   groupNotesByOnset,
-  notesInLookAheadWindow,
-  LOOK_AHEAD_SECONDS,
-  noteNames,
+  currentOnsetGroup,
+  nextOnsetGroup,
+  CURRENT_ONSET_WINDOW_SECONDS,
   type PracticeVoice,
   type OnsetGroup,
 } from './referenceNotes';

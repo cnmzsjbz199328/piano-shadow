@@ -1,4 +1,4 @@
-import { useAppStore, type FallingNotesMode, type PracticeMode, type PracticeSurface, type PracticeVoice } from '@/stores/useAppStore';
+import { useAppStore, type PracticeMode, type PracticeSurface, type PracticeVoice } from '@/stores/useAppStore';
 import { MIN_TEMPO_SCALE, MAX_TEMPO_SCALE } from '@/playback-engine';
 import { MidiDevicePanel } from './MidiDevicePanel';
 import { LiveFeedback } from '@/components/feedback/LiveFeedback';
@@ -14,11 +14,6 @@ const VOICES: Array<{ id: PracticeVoice; label: string }> = [
   { id: 'both', label: 'Both hands' },
   { id: 'left', label: 'Left' },
   { id: 'right', label: 'Right' },
-];
-const FALLING_NOTE_MODES: Array<{ id: FallingNotesMode; label: string; description: string }> = [
-  { id: 'guidance', label: 'Guidance', description: 'Full 2.5-second reference window' },
-  { id: 'subtle', label: 'Subtle', description: 'Current and next onset group' },
-  { id: 'off', label: 'Off', description: 'Hide falling-note guidance' },
 ];
 
 function formatTime(seconds: number): string {
@@ -48,8 +43,6 @@ export function TransportControls({ surface, onSurfaceChange, surfaceSwitchDisab
   const isAttemptRunning = useAppStore((s) => s.isAttemptRunning);
   const practiceVoice = useAppStore((s) => s.practiceVoice);
   const setPracticeVoice = useAppStore((s) => s.setPracticeVoice);
-  const fallingNotesMode = useAppStore((s) => s.fallingNotesMode);
-  const setFallingNotesMode = useAppStore((s) => s.setFallingNotesMode);
   const waitingForMidi = useAppStore((s) => s.waitingForMidi);
   const liveFeedback = useAppStore((s) => s.liveFeedback);
   const play = useAppStore((s) => s.play);
@@ -131,19 +124,6 @@ export function TransportControls({ surface, onSurfaceChange, surfaceSwitchDisab
                 {VOICES.map((voice) => (
                   <button key={voice.id} type="button" aria-pressed={practiceVoice === voice.id} disabled={isAttemptRunning} onClick={() => setPracticeVoice(voice.id)}>
                     {voice.label}
-                  </button>
-                ))}
-              </div>
-              <div className="mode-tabs" role="group" aria-label="Falling notes display">
-                {FALLING_NOTE_MODES.map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    aria-pressed={fallingNotesMode === item.id}
-                    title={item.description}
-                    onClick={() => setFallingNotesMode(item.id)}
-                  >
-                    {item.label}
                   </button>
                 ))}
               </div>

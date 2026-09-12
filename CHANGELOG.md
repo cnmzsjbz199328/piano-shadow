@@ -9,6 +9,16 @@ available from Settings → Recognition diagnostics (`/lab`). This removes the
 `Single-page recognition`, `Listen to my playing`, `Ready to listen`, and
 unmeasured experimental notice from the primary practice surface.
 
+The separate falling-notes canvas above the keyboard (its status line, hint
+text, and animated note lanes) is removed. Guidance is now drawn directly on
+the keyboard itself: the current target note's name is labelled, in an accent
+colour, right above the key it names; the next onset group is labelled the
+same way in a muted style, with no fill on the key (so it can't be mistaken
+for "play this now"). `PianoKeyboard` reserves that label row's height at all
+times, so nothing shifts when a song loads or the Score/Library faces flip.
+The Guidance/Subtle/Off display-mode control is removed with it — there is no
+longer a variable-length look-ahead window to switch between.
+
 ## v0.9.0 — Score / Library flip workspace (2026-09-10)
 
 UI/interaction round from [`doc/UI_OPTIMIZATION_PLAN.md`](doc/UI_OPTIMIZATION_PLAN.md).
