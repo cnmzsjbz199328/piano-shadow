@@ -21,9 +21,14 @@ export function TransportControls({ surface, onSurfaceChange, surfaceSwitchDisab
   const duration = useAppStore((s) => s.duration);
   const tempoScale = useAppStore((s) => s.tempoScale);
   const waitingForMidi = useAppStore((s) => s.waitingForMidi);
+  const isAttemptRunning = useAppStore((s) => s.isAttemptRunning);
   const play = useAppStore((s) => s.play);
   const pause = useAppStore((s) => s.pause);
+  const stop = useAppStore((s) => s.stop);
+  const restart = useAppStore((s) => s.restart);
   const seek = useAppStore((s) => s.seek);
+  const startAttempt = useAppStore((s) => s.startAttempt);
+  const finishAttempt = useAppStore((s) => s.finishAttempt);
   const setTempoScale = useAppStore((s) => s.setTempoScale);
 
   const playing = transportState === 'playing' || transportState === 'counting-in';
@@ -69,7 +74,7 @@ export function TransportControls({ surface, onSurfaceChange, surfaceSwitchDisab
           <button
             type="button"
             className="btn btn--quiet btn--sm practice-speed"
-            aria-label={`Playback speed ${displayTempo.toFixed(1)}. Increase speed`}
+            aria-label={`Speed is ${displayTempo.toFixed(1)}. Tap to increase.`}
             title="Click to increase playback speed"
             disabled={disabled}
             onClick={increaseTempo}
@@ -99,6 +104,20 @@ export function TransportControls({ surface, onSurfaceChange, surfaceSwitchDisab
           </button>
         </div>
       </div>
+
+      {song && (
+        <div className="practice-subrow">
+          <button type="button" className="btn btn--quiet btn--sm" disabled={disabled} onClick={stop}>Stop</button>
+          <button type="button" className="btn btn--icon" aria-label="Restart from the beginning" disabled={disabled || recognitionActive} onClick={restart}>↶</button>
+          <span className="practice-subrow__spacer" />
+          {!isAttemptRunning ? (
+            <button type="button" className="btn btn--primary btn--sm" disabled={recognitionActive} onClick={startAttempt}>Start practice</button>
+          ) : (
+            <button type="button" className="btn btn--danger btn--sm" onClick={() => void finishAttempt()}>Finish practice</button>
+          )}
+          {isAttemptRunning && <span className="badge badge--ok badge--dot">Recording</span>}
+        </div>
+      )}
 
       {song && transportState === 'counting-in' && <span className="count-in-banner">Count-in...</span>}
       {song && waitingForMidi && <div className="wait-banner" role="status">Play {waitingForMidi.length > 1 ? 'these notes' : 'this note'} to continue...</div>}
