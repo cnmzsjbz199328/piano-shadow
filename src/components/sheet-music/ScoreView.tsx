@@ -395,21 +395,27 @@ function updateScoreHighlight(
   });
 
   if (activeIndex !== null && activeIndex !== previousActiveIndex) {
-    // 'nearest' (not 'center') moves the viewport only when the note is
-    // actually out of view. 'center' recomputes a fresh target on every note
-    // change, and since note bounding boxes vary slightly (stem direction,
-    // chord height, accidentals), that produced a visible shake as playback
-    // moved between notes on the same row that were already fully visible.
-    // A chord can have one rendered group in treble and another in bass. Use
-    // the whole system as the scroll target so both parts enter the viewport
-    // together; scrolling to only the first note can leave the lower chord
-    // clipped at the bottom edge.
+    // Center the complete system when playback enters a new highlighted area
+    // or when a seek lands on a clipped note. This prevents the lower stave
+    // from remaining hidden while avoiding a jump for every note in one row.
     const activeNote = rendered.notes[activeIndex];
-    (activeNote?.systemElement ?? activeNote?.element)?.scrollIntoView?.({
-      block: 'nearest',
-      inline: 'nearest',
-      behavior: 'smooth',
-    });
+    const previousNote = previousActiveIndex === null ? undefined : rendered.notes[previousActiveIndex];
+    const activeElement = activeNote?.element;
+    const viewport = activeElement?.closest<HTMLElement>('.score-surface__viewport');
+    const noteRect = activeElement?.getBoundingClientRect();
+    const viewportRect = viewport?.getBoundingClientRect();
+    const noteIsClipped = Boolean(
+      noteRect && viewportRect &&
+      (noteRect.top < viewportRect.top + 12 || noteRect.bottom > viewportRect.bottom - 12),
+    );
+    const enteredNewSystem = activeNote?.systemRow !== previousNote?.systemRow;
+    if (enteredNewSystem || noteIsClipped) {
+      (activeNote?.systemElement ?? activeElement)?.scrollIntoView?.({
+        block: 'center',
+        inline: 'nearest',
+        behavior: 'smooth',
+      });
+    }
   }
   return activeIndex;
 }
