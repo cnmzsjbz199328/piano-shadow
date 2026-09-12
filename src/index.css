@@ -230,14 +230,14 @@ select {
 .header-settings__category {
   flex: 0 0 auto;
   height: 44px;
-  padding: 0 0.7rem;
+  padding: 0 0.8rem;
   border: 0;
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-dim);
   cursor: pointer;
-  font-size: var(--text-sm);
-  font-weight: 600;
+  font-size: var(--text-base);
+  font-weight: 650;
   white-space: nowrap;
 }
 
@@ -839,6 +839,7 @@ select {
   gap: var(--space-3);
   max-width: 1600px;
   margin: 0 auto;
+  min-height: calc(100vh - var(--nav-h));
   padding: var(--space-3) var(--space-4) 0;
 }
 
@@ -933,37 +934,51 @@ select {
 .practice-live-feedback .live-feedback { display: flex; gap: var(--space-3); max-height: 1.7rem; overflow: hidden; }
 .practice-live-feedback .live-feedback__item { min-width: 0; flex: 0 1 auto; }
 
-/* header row: song name (left) · mode selector (centre) · transport (right) */
+/* Single-line transport: title, seek, time, play/speed, surface switch. */
 .practice-header {
   display: flex;
   align-items: center;
   gap: var(--space-4);
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  font-size: var(--text-sm);
 }
 
 .practice-header__id {
-  min-width: 0;
-  margin-right: auto;
+  flex: 0 1 clamp(14rem, 28vw, 27rem);
+  min-width: 8rem;
 }
 
 .practice-header__title {
-  font-size: var(--text-xl);
+  font-size: 1rem;
   font-weight: 650;
   margin: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 22rem;
+  max-width: 100%;
 }
 
 .practice-header__center {
   margin: 0 auto;
 }
 
+.practice-header__seek {
+  flex: 1 1 14rem;
+  min-width: 7rem;
+  accent-color: var(--accent);
+}
+
 .practice-header__transport {
   display: flex;
   align-items: center;
   gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+.practice-speed {
+  min-width: 3.25rem;
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-sm);
 }
 
 /* Score / Library surface switch — reuses the segmented `.mode-tabs` look so it
@@ -1045,7 +1060,7 @@ select {
 .transport__time {
   font-variant-numeric: tabular-nums;
   color: var(--text-dim);
-  font-size: var(--text-xs);
+  font-size: var(--text-sm);
   white-space: nowrap;
 }
 
@@ -1205,8 +1220,9 @@ select {
   position: sticky;
   bottom: 0;
   background: var(--bg);
-  padding-bottom: var(--space-3);
-  padding-top: var(--space-2);
+  margin-top: 0;
+  padding-bottom: 0;
+  padding-top: 0;
 }
 
 /* --- transport (legacy panel form, still used if rendered as a block) --- */
@@ -1300,7 +1316,7 @@ select {
   /* 1352 = the 88-key default totalWidth (52 white keys × 26). Capping here
      keeps the desktop keyboard visually identical while the SVG below scales
      down to fit narrower viewports. */
-  max-width: 1352px;
+  max-width: none;
   margin-inline: auto;
   overflow-x: auto;
   border: 1px solid var(--border-subtle);
@@ -1820,6 +1836,10 @@ select {
 /* --- responsive --- */
 
 @media (max-width: 1099px) {
+  .practice-header {
+    gap: var(--space-2);
+  }
+
   .app-nav {
     grid-template-columns: 1fr auto;
     height: 60px;
@@ -1847,13 +1867,8 @@ select {
   }
 
   .practice-page {
+    min-height: calc(100vh - var(--nav-h));
     padding: var(--space-3) var(--space-3) 0;
-  }
-
-  .practice-header__center {
-    order: 3;
-    margin: 0;
-    width: 100%;
   }
 
   .practice-header__title {
@@ -1861,11 +1876,33 @@ select {
   }
 
   .practice-header__id {
-    margin-right: 0;
+    flex-basis: 15rem;
   }
 }
 
 @media (max-width: 640px) {
+  .practice-header {
+    gap: var(--space-2);
+    flex-wrap: wrap;
+  }
+
+  .practice-header__id {
+    flex: 1 1 calc(100% - 12rem);
+  }
+
+  .practice-header__seek {
+    order: 3;
+    flex-basis: calc(100% - 4rem);
+  }
+
+  .practice-header > .transport__time {
+    order: 4;
+  }
+
+  .practice-header__transport {
+    order: 2;
+  }
+
   .song-row { align-items: flex-start; flex-direction: column; }
   .song-row__actions { justify-content: flex-start; }
   .song-row__actions { width: 100%; }
@@ -1877,11 +1914,12 @@ select {
   }
 
   .surface-switch {
-    width: 100%;
+    order: 5;
+    margin-left: auto;
   }
 
   .surface-switch button {
-    flex: 1;
+    padding-inline: 0.6rem;
   }
 }
 
@@ -1932,13 +1970,18 @@ select {
 
 .practice-workspace {
   perspective: 1600px;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
 }
 
-/* The fixed frame. Score and Library share this box exactly, so a flip never
-   changes where the keyboard dock sits (D-03, D-04). */
+/* Score and Library share this expanding frame, so the score gets all remaining
+   vertical room above the bottom keyboard dock. */
 .practice-workspace__viewport {
   position: relative;
-  height: var(--workspace-h);
+  flex: 1 1 auto;
+  min-height: var(--workspace-h);
+  height: auto;
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   overflow: hidden;

@@ -58,7 +58,7 @@ const DB_VERSION = 2;
 const SETTINGS_KEY = 'settings' as const;
 
 export const DEFAULT_SETTINGS: SettingsRecord = {
-  tempoScale: 1,
+  tempoScale: 0.8,
   metronomeEnabled: false,
   countInEnabled: true,
   lastMidiInputId: null,

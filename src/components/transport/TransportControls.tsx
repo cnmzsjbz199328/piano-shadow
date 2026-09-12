@@ -10,7 +10,7 @@ interface TransportControlsProps {
   surface: PracticeSurface;
   /** Request a flip to the other face (ignored by the caller while one is running). */
   onSurfaceChange: (surface: PracticeSurface) => void;
-  /** Lock the switch while a flip is in flight (UI_OPTIMIZATION_PLAN.md §5.2). */
+  /** Lock the switch while a flip is in flight (UI_OPTIMIZATION_PLAN.md section 5.2). */
   surfaceSwitchDisabled?: boolean;
 }
 
@@ -19,32 +19,65 @@ export function TransportControls({ surface, onSurfaceChange, surfaceSwitchDisab
   const transportState = useAppStore((s) => s.transportState);
   const currentTime = useAppStore((s) => s.currentTime);
   const duration = useAppStore((s) => s.duration);
-  const isAttemptRunning = useAppStore((s) => s.isAttemptRunning);
+  const tempoScale = useAppStore((s) => s.tempoScale);
   const waitingForMidi = useAppStore((s) => s.waitingForMidi);
   const play = useAppStore((s) => s.play);
   const pause = useAppStore((s) => s.pause);
-  const stop = useAppStore((s) => s.stop);
-  const restart = useAppStore((s) => s.restart);
   const seek = useAppStore((s) => s.seek);
-  const startAttempt = useAppStore((s) => s.startAttempt);
-  const finishAttempt = useAppStore((s) => s.finishAttempt);
+  const setTempoScale = useAppStore((s) => s.setTempoScale);
 
   const playing = transportState === 'playing' || transportState === 'counting-in';
   const recognitionActive = useAppStore((s) => s.recognitionState === 'initializing' || s.recognitionState === 'listening');
   const disabled = !song;
+  const displayTempo = Math.min(1, Math.max(0.1, Math.round(tempoScale * 10) / 10));
+
+  function increaseTempo(): void {
+    const next = displayTempo >= 1 ? 0.1 : Math.min(1, displayTempo + 0.1);
+    setTempoScale(Number(next.toFixed(1)));
+  }
+
+  // File imports already strip the extension, but saved records from older
+  // versions may still contain it. Keep the transport title clean in either case.
+  const displayName = song?.name?.replace(/\.(mid|midi)$/i, '') || song?.name;
+
   return (
     <div className="song-transport">
       <div className="practice-header">
         <div className="practice-header__id">
-          <h2 className="practice-header__title" title={song?.name}>{song?.name ?? 'No reference loaded'}</h2>
+          <h2 className="practice-header__title" title={displayName}>{displayName ?? 'No reference loaded'}</h2>
         </div>
+
+        {song && (
+          <input
+            className="practice-header__seek"
+            type="range"
+            min={0}
+            max={Math.max(duration, 0.01)}
+            step={0.01}
+            value={Math.min(currentTime, duration)}
+            disabled={disabled}
+            onChange={(e) => seek(Number(e.target.value))}
+            aria-label="Seek"
+          />
+        )}
+        {song && <span className="transport__time">{formatTime(currentTime)} / {formatTime(duration)}</span>}
+
         <div className="practice-header__transport">
           <button type="button" className="btn btn--primary" disabled={disabled || recognitionActive} onClick={() => (playing ? pause() : void play())}>
-            <span aria-hidden>{playing ? 'Ⅱ' : '▶'}</span> {playing ? 'Pause' : 'Play'}
+            <span aria-hidden>{playing ? '\u23f8' : '\u25b6'}</span> {playing ? 'Pause' : 'Play'}
           </button>
-          <button type="button" className="btn btn--quiet btn--sm" disabled={disabled} onClick={stop}>Stop</button>
-          <button type="button" className="btn btn--icon" aria-label="Restart from the beginning" disabled={disabled || recognitionActive} onClick={restart}>↶</button>
+          <button
+            type="button"
+            className="btn btn--quiet btn--sm practice-speed"
+            aria-label={`Playback speed ${displayTempo.toFixed(1)}. Increase speed`}
+            title="Click to increase playback speed"
+            disabled={disabled}
+            onClick={increaseTempo}
+          >
+            {displayTempo.toFixed(1)}x
+          </button>
         </div>
+
         <div className="surface-switch mode-tabs" role="group" aria-label="Practice workspace surface">
           <button
             type="button"
@@ -67,25 +100,8 @@ export function TransportControls({ surface, onSurfaceChange, surfaceSwitchDisab
         </div>
       </div>
 
-      {song && (
-        <>
-          <div className="practice-subrow">
-            <span className="transport__time">{formatTime(currentTime)} / {formatTime(duration)}</span>
-            <input className="practice-subrow__seek" type="range" min={0} max={Math.max(duration, 0.01)} step={0.01} value={Math.min(currentTime, duration)} disabled={disabled} onChange={(e) => seek(Number(e.target.value))} aria-label="Seek" />
-            <span className="practice-subrow__attempt">
-              {!isAttemptRunning ? (
-                <button type="button" className="btn btn--primary btn--sm" disabled={recognitionActive} onClick={startAttempt}>Start practice</button>
-              ) : (
-                <button type="button" className="btn btn--danger btn--sm" onClick={() => void finishAttempt()}>Finish practice</button>
-              )}
-              {isAttemptRunning && <span className="badge badge--ok badge--dot">Recording</span>}
-            </span>
-          </div>
-
-          {transportState === 'counting-in' && <span className="count-in-banner">Count-in…</span>}
-          {waitingForMidi && <div className="wait-banner" role="status">Play {waitingForMidi.length > 1 ? 'these notes' : 'this note'} to continue…</div>}
-        </>
-      )}
+      {song && transportState === 'counting-in' && <span className="count-in-banner">Count-in...</span>}
+      {song && waitingForMidi && <div className="wait-banner" role="status">Play {waitingForMidi.length > 1 ? 'these notes' : 'this note'} to continue...</div>}
     </div>
   );
 }

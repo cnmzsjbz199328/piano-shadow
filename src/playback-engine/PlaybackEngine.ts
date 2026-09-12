@@ -28,8 +28,8 @@ export interface PlaybackEngineOptions {
   onEnded?: (finalTime: number) => void;
 }
 
-export const MIN_TEMPO_SCALE = 0.25;
-export const MAX_TEMPO_SCALE = 2;
+export const MIN_TEMPO_SCALE = 0.1;
+export const MAX_TEMPO_SCALE = 1;
 export const DEFAULT_COUNT_IN_BEATS = 4;
 
 /**
@@ -48,7 +48,7 @@ function clamp(v: number, lo: number, hi: number): number {
 export class PlaybackEngine {
   private currentPerformance: Performance | null = null;
   private state: PlaybackState = 'idle';
-  private scale = 1;
+  private scale = 0.8;
   private metronomeEnabled = false;
   private countInEnabled = false;
 

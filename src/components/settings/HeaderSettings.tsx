@@ -26,7 +26,7 @@ const VOICES: Array<{ id: PracticeVoice; label: string }> = [
   { id: 'right', label: 'Right' },
 ];
 
-const TEMPO_STEP = 0.05;
+const TEMPO_STEP = 0.1;
 
 function useMediaQuery(query: string): boolean {
   const [matches, setMatches] = useState(() => (

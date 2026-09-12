@@ -368,7 +368,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   transportState: 'idle',
   currentTime: 0,
   duration: 0,
-  tempoScale: 1,
+  tempoScale: persistence.DEFAULT_SETTINGS.tempoScale,
   metronomeEnabled: false,
   countInEnabled: true,
   isAttemptRunning: false,
