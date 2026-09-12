@@ -36,12 +36,10 @@ const REFUSAL_MESSAGE =
   'Notation needs a quantised rhythm — not available for recorded takes yet.';
 
 /**
- * Keep the render bounded — still no pagination/engraving. Raised from 16 now
- * that `ScoreSurface` gives the staves their own vertical scroll viewport
- * (UI_OPTIMIZATION_PLAN.md §5.3): a longer piece scrolls instead of being
- * squeezed, but the cap stays finite so one enormous import can't lock the tab.
+ * Absolute safety valve for corrupt or absurd MIDI. This is not a UX limit:
+ * normal long pieces should be represented completely and rendered lazily.
  */
-const MAX_MEASURES = 64;
+const MODEL_MEASURE_SAFETY_CAP = 4000;
 /** Treble vs. bass split point (middle C). Imported MIDI has no `hand` yet. */
 const MIDDLE_C = 60;
 /** Sixteenth-note grid: quarter beat / 4. */
@@ -51,6 +49,19 @@ const FALLBACK_WIDTH = 900;
 const MIN_MEASURE_WIDTH = 260;
 /** Maximum number of bars on one system; density can reduce this automatically. */
 const MAX_MEASURES_PER_ROW = 4;
+/** Number of systems added to the SVG for each lazy-render trigger. */
+const ROWS_PER_BATCH = 4;
+/** Start with enough systems to fill a typical score viewport plus a buffer. */
+const INITIAL_RENDERED_ROWS = 6;
+/** Begin rendering the next batch before the user reaches an unrendered system. */
+const SCROLL_LOOKAHEAD_PX = 600;
+/** Keep playback notation ahead of the currently highlighted system. */
+const PLAYBACK_LOOKAHEAD_ROWS = 2;
+const SCORE_PAD = 10;
+const SCORE_CLEF_EXTRA = 64;
+const SCORE_TREBLE_Y = 0;
+const SCORE_BASS_Y = 92;
+const SCORE_ROW_HEIGHT = 210;
 
 const SHARP_SPELLING = [
   'c',
@@ -96,6 +107,7 @@ interface ScoreModel {
   numerator: number;
   denominator: number;
   timeSignature: string;
+  measureSeconds: number;
   truncated: boolean;
 }
 
@@ -266,7 +278,7 @@ function buildScoreModel(song: Performance): ScoreModel | null {
     ...quantized.map((n) => n.startTime + n.duration),
   );
   const neededMeasures = Math.max(1, Math.ceil(span / measureSeconds - 1e-6));
-  const measureCount = Math.min(MAX_MEASURES, neededMeasures);
+  const measureCount = Math.min(MODEL_MEASURE_SAFETY_CAP, neededMeasures);
 
   const treble = quantized.filter((n) => n.midi >= MIDDLE_C);
   const bass = quantized.filter((n) => n.midi < MIDDLE_C);
@@ -287,7 +299,8 @@ function buildScoreModel(song: Performance): ScoreModel | null {
     numerator,
     denominator,
     timeSignature: `${numerator}/${denominator}`,
-    truncated: neededMeasures > MAX_MEASURES,
+    measureSeconds,
+    truncated: neededMeasures > MODEL_MEASURE_SAFETY_CAP,
   };
 }
 
@@ -337,6 +350,27 @@ interface RenderedScoreNote {
 
 interface RenderedScore {
   notes: RenderedScoreNote[];
+}
+
+interface ScoreLayout {
+  model: ScoreModel;
+  rows: MeasureRow[];
+  measureRows: number[];
+  rowWidths: number[];
+  width: number;
+  totalHeight: number;
+  rowHeight: number;
+}
+
+interface ScoreRenderer {
+  /** Highest row index (inclusive) already drawn; -1 initially. */
+  lastRenderedRow: number;
+  /** All rows that exist in this score, for lookahead/limit checks. */
+  totalRows: number;
+  /** Notes are appended as rows are drawn and are never replaced. */
+  notes: RenderedScoreNote[];
+  /** Draw any undrawn rows up to and including targetRow (clamped). */
+  renderUpTo: (targetRow: number) => void;
 }
 
 function isHighlightableTransportState(state: string): boolean {
@@ -420,123 +454,142 @@ function drawVoice(
   });
 }
 
-function renderScore(
-  VF: VexModule,
-  host: HTMLDivElement,
-  model: ScoreModel,
-  containerWidth: number,
-  ink: string,
-): RenderedScore {
-  host.replaceChildren();
-
+function createScoreLayout(model: ScoreModel, containerWidth: number): ScoreLayout {
   const viewportWidth = Math.max(320, containerWidth || FALLBACK_WIDTH);
-  const pad = 10;
-  const clefExtra = 64;
-  const trebleY = 0;
-  const bassY = 92;
-  const rowHeight = 210;
-
-  const usableWidth = viewportWidth - pad * 2;
+  const usableWidth = viewportWidth - SCORE_PAD * 2;
   const rows = packMeasureRows(model.measures, usableWidth);
   const rowWidths = rows.map(
-    (row) => clefExtra + row.minimumWidths.reduce((sum, width) => sum + width, 0),
+    (row) => SCORE_CLEF_EXTRA + row.minimumWidths.reduce((sum, width) => sum + width, 0),
   );
   // A very dense system may be wider than the viewport. The score host already
   // owns horizontal scrolling, so preserve note spacing instead of shrinking
   // the notation into collisions.
-  const width = Math.max(viewportWidth, ...rowWidths.map((rowWidth) => rowWidth + pad * 2));
-  const totalHeight = rows.length * rowHeight + pad * 2;
+  const width = Math.max(viewportWidth, ...rowWidths.map((rowWidth) => rowWidth + SCORE_PAD * 2));
+  const rowHeight = SCORE_ROW_HEIGHT;
+  const totalHeight = rows.length * rowHeight + SCORE_PAD * 2;
+  const measureRows: number[] = [];
+  rows.forEach((row, rowIndex) => {
+    row.measures.forEach(() => measureRows.push(rowIndex));
+  });
+
+  return { model, rows, measureRows, rowWidths, width, totalHeight, rowHeight };
+}
+
+function createScoreRenderer(
+  VF: VexModule,
+  host: HTMLDivElement,
+  layout: ScoreLayout,
+  ink: string,
+): ScoreRenderer {
+  host.replaceChildren();
 
   const renderer = new VF.Renderer(host, VF.Renderer.Backends.SVG);
-  renderer.resize(width, totalHeight);
+  renderer.resize(layout.width, layout.totalHeight);
   const ctx = renderer.getContext();
   ctx.setFillStyle(ink);
   ctx.setStrokeStyle(ink);
 
-  const renderedNotes: RenderedScoreNote[] = [];
+  // The first stave drawn for each system is also its scroll target. No
+  // placeholder DOM nodes are needed for rows that have not been rendered.
+  const systemElements: Array<SVGElement | undefined> = [];
 
-  for (let row = 0; row < rows.length; row += 1) {
-    const layoutRow = rows[row];
-    if (!layoutRow) continue;
-    const rowMeasures = layoutRow.measures;
-    const minimumRowWidth = rowWidths[row] ?? usableWidth;
-    const extraPerMeasure = Math.max(0, usableWidth - minimumRowWidth) / rowMeasures.length;
-    const rowTop = pad + row * rowHeight;
-    let x = pad;
+  const scoreRenderer: ScoreRenderer = {
+    lastRenderedRow: -1,
+    totalRows: layout.rows.length,
+    notes: [],
+    renderUpTo(targetRow) {
+      const clampedTarget = Math.min(Math.max(targetRow, -1), layout.rows.length - 1);
+      if (clampedTarget <= scoreRenderer.lastRenderedRow) return;
 
-    for (let mi = 0; mi < rowMeasures.length; mi += 1) {
-      const measure = rowMeasures[mi];
-      if (!measure) continue;
-      const isRowStart = mi === 0;
-      const measureWidth = (layoutRow.minimumWidths[mi] ?? MIN_MEASURE_WIDTH) + extraPerMeasure;
-      const staveWidth = isRowStart ? measureWidth + clefExtra : measureWidth;
+      for (let row = scoreRenderer.lastRenderedRow + 1; row <= clampedTarget; row += 1) {
+        const layoutRow = layout.rows[row];
+        if (!layoutRow) continue;
+        const minimumRowWidth = layout.rowWidths[row] ?? layout.width;
+        const usableWidth = Math.max(0, layout.width - SCORE_PAD * 2);
+        const extraPerMeasure = Math.max(0, usableWidth - minimumRowWidth) / layoutRow.measures.length;
+        const rowTop = SCORE_PAD + row * layout.rowHeight;
+        let x = SCORE_PAD;
 
-      const treble = new VF.Stave(x, rowTop + trebleY, staveWidth);
-      const bass = new VF.Stave(x, rowTop + bassY, staveWidth);
-      treble.setStyle({ fillStyle: ink, strokeStyle: ink });
-      bass.setStyle({ fillStyle: ink, strokeStyle: ink });
+        for (let mi = 0; mi < layoutRow.measures.length; mi += 1) {
+          const measure = layoutRow.measures[mi];
+          if (!measure) continue;
+          const isRowStart = mi === 0;
+          const measureWidth =
+            (layoutRow.minimumWidths[mi] ?? MIN_MEASURE_WIDTH) + extraPerMeasure;
+          const staveWidth = isRowStart ? measureWidth + SCORE_CLEF_EXTRA : measureWidth;
 
-      if (isRowStart) {
-        treble.addClef('treble');
-        bass.addClef('bass');
-        if (row === 0) {
-          treble.addTimeSignature(model.timeSignature);
-          bass.addTimeSignature(model.timeSignature);
+          const treble = new VF.Stave(x, rowTop + SCORE_TREBLE_Y, staveWidth);
+          const bass = new VF.Stave(x, rowTop + SCORE_BASS_Y, staveWidth);
+          treble.setStyle({ fillStyle: ink, strokeStyle: ink });
+          bass.setStyle({ fillStyle: ink, strokeStyle: ink });
+
+          if (isRowStart) {
+            treble.addClef('treble');
+            bass.addClef('bass');
+            if (row === 0) {
+              treble.addTimeSignature(layout.model.timeSignature);
+              bass.addTimeSignature(layout.model.timeSignature);
+            }
+          }
+
+          treble.setContext(ctx).draw();
+          bass.setContext(ctx).draw();
+          if (isRowStart) systemElements[row] = treble.getSVGElement();
+
+          if (isRowStart) {
+            new VF.StaveConnector(treble, bass).setType('brace').setContext(ctx).draw();
+            new VF.StaveConnector(treble, bass).setType('singleLeft').setContext(ctx).draw();
+          }
+          if (mi === layoutRow.measures.length - 1) {
+            new VF.StaveConnector(treble, bass).setType('singleRight').setContext(ctx).draw();
+          }
+
+          try {
+            scoreRenderer.notes.push(
+              ...drawVoice(VF, ctx, treble, measure.treble, ink, 'treble', row),
+              ...drawVoice(VF, ctx, bass, measure.bass, ink, 'bass', row),
+            );
+          } catch {
+            // One malformed bar must not blank the whole score; leave the empty
+            // stave drawn above and carry on.
+          }
+
+          x += staveWidth;
         }
       }
 
-      treble.setContext(ctx).draw();
-      bass.setContext(ctx).draw();
-
-      if (isRowStart) {
-        new VF.StaveConnector(treble, bass).setType('brace').setContext(ctx).draw();
-        new VF.StaveConnector(treble, bass).setType('singleLeft').setContext(ctx).draw();
-      }
-      if (mi === rowMeasures.length - 1) {
-        new VF.StaveConnector(treble, bass).setType('singleRight').setContext(ctx).draw();
-      }
-
-      try {
-        renderedNotes.push(...drawVoice(VF, ctx, treble, measure.treble, ink, 'treble', row));
-        renderedNotes.push(...drawVoice(VF, ctx, bass, measure.bass, ink, 'bass', row));
-      } catch {
-        // One malformed bar must not blank the whole score; leave the empty
-        // stave drawn above and carry on.
-      }
-
-      x += staveWidth;
-    }
-  }
-
-  const svg = host.querySelector('svg');
-  const systemElements = rows.map((_, row) => {
-    const anchor = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-    anchor.setAttribute('class', 'score-system-anchor');
-    anchor.setAttribute('x', String(pad));
-    anchor.setAttribute('y', String(pad + row * rowHeight));
-    anchor.setAttribute('width', String(width - pad * 2));
-    anchor.setAttribute('height', String(rowHeight));
-    anchor.setAttribute('fill', 'transparent');
-    anchor.setAttribute('pointer-events', 'none');
-    anchor.setAttribute('aria-hidden', 'true');
-    svg?.appendChild(anchor);
-    return anchor;
-  });
-
-  // Keep the mapping on the rendered SVG instead of rebuilding the notation
-  // on every transport tick. CSS can then recolour the whole VexFlow group
-  // (notehead, stem, flag and accidental) as one visual unit.
-  renderedNotes.forEach(({ element }, index) => {
-    element.classList.add('score-note');
-    element.dataset.scoreNoteIndex = String(index);
-  });
-
-  return {
-    notes: renderedNotes.map((note) => ({
-      ...note,
-      systemElement: systemElements[note.systemRow],
-    })),
+      scoreRenderer.lastRenderedRow = clampedTarget;
+      scoreRenderer.notes.forEach((note, index) => {
+        note.element.classList.add('score-note');
+        note.element.dataset.scoreNoteIndex = String(index);
+        note.systemElement = systemElements[note.systemRow];
+      });
+    },
   };
+
+  return scoreRenderer;
+}
+
+function playbackTargetRow(layout: ScoreLayout, currentTime: number): number {
+  if (layout.measureRows.length === 0) return -1;
+  const measureIndex = Math.min(
+    layout.measureRows.length - 1,
+    Math.max(0, Math.floor(Math.max(0, currentTime) / layout.model.measureSeconds)),
+  );
+  return layout.measureRows[measureIndex] ?? -1;
+}
+
+function renderPlaybackAhead(
+  renderer: ScoreRenderer,
+  layout: ScoreLayout,
+  currentTime: number,
+  transportState: string,
+): void {
+  if (!isHighlightableTransportState(transportState)) return;
+  const targetRow = playbackTargetRow(layout, currentTime);
+  if (targetRow + PLAYBACK_LOOKAHEAD_ROWS > renderer.lastRenderedRow) {
+    renderer.renderUpTo(targetRow + PLAYBACK_LOOKAHEAD_ROWS);
+  }
 }
 
 export function ScoreView() {
@@ -548,7 +601,7 @@ export function ScoreView() {
   const hostRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
   const [renderFailed, setRenderFailed] = useState(false);
-  const renderedScoreRef = useRef<RenderedScore | null>(null);
+  const renderedScoreRef = useRef<ScoreRenderer | null>(null);
   const lastActiveIndexRef = useRef<number | null>(null);
   const playbackRef = useRef({ currentTime, transportState });
   playbackRef.current = { currentTime, transportState };
@@ -557,6 +610,10 @@ export function ScoreView() {
   const model = useMemo(
     () => (eligible && song ? buildScoreModel(song) : null),
     [eligible, song],
+  );
+  const layout = useMemo(
+    () => (model ? createScoreLayout(model, containerWidth) : null),
+    [model, containerWidth],
   );
 
   useEffect(() => {
@@ -572,7 +629,7 @@ export function ScoreView() {
     const host = hostRef.current;
     if (!host) return;
 
-    if (!model) {
+    if (!layout) {
       host.replaceChildren();
       renderedScoreRef.current = null;
       lastActiveIndexRef.current = null;
@@ -581,6 +638,7 @@ export function ScoreView() {
     }
 
     let cancelled = false;
+    let removeScrollListener: (() => void) | undefined;
     setRenderFailed(false);
 
     void (async () => {
@@ -590,19 +648,35 @@ export function ScoreView() {
         // structural `VexModule` at this single boundary.
         const VF = (await import('vexflow')) as unknown as VexModule;
         if (cancelled) return;
-        renderedScoreRef.current = renderScore(
-          VF,
-          host,
-          model,
-          containerWidth || host.clientWidth,
-          readInk(),
+        const renderer = createScoreRenderer(VF, host, layout, readInk());
+        renderer.renderUpTo(INITIAL_RENDERED_ROWS - 1);
+        renderPlaybackAhead(
+          renderer,
+          layout,
+          playbackRef.current.currentTime,
+          playbackRef.current.transportState,
         );
+        renderedScoreRef.current = renderer;
         lastActiveIndexRef.current = updateScoreHighlight(
-          renderedScoreRef.current,
+          renderer,
           playbackRef.current.currentTime,
           playbackRef.current.transportState,
           null,
         );
+
+        const scrollContainer = host.closest('.score-surface__viewport') as HTMLElement | null;
+        const onScroll = (): void => {
+          if (renderer.lastRenderedRow >= renderer.totalRows - 1) return;
+          const viewportBottom = scrollContainer
+            ? scrollContainer.scrollTop + scrollContainer.clientHeight
+            : host.scrollTop + host.clientHeight;
+          const nextRowTop = SCORE_PAD + (renderer.lastRenderedRow + 1) * layout.rowHeight;
+          if (viewportBottom >= nextRowTop - SCROLL_LOOKAHEAD_PX) {
+            renderer.renderUpTo(renderer.lastRenderedRow + ROWS_PER_BATCH);
+          }
+        };
+        scrollContainer?.addEventListener('scroll', onScroll);
+        removeScrollListener = () => scrollContainer?.removeEventListener('scroll', onScroll);
       } catch {
         if (!cancelled) {
           host.replaceChildren();
@@ -614,23 +688,26 @@ export function ScoreView() {
 
     return () => {
       cancelled = true;
+      removeScrollListener?.();
     };
-  }, [model, containerWidth]);
+  }, [layout]);
 
   // The playback engine already advances currentTime from Tone.Transport. This
   // effect only toggles classes on the existing SVG, so highlighting remains
   // cheap even for a long score.
   useEffect(() => {
-    const rendered = renderedScoreRef.current;
-    if (!rendered) return;
+    const renderer = renderedScoreRef.current;
+    if (!renderer || !layout) return;
+
+    renderPlaybackAhead(renderer, layout, currentTime, transportState);
 
     lastActiveIndexRef.current = updateScoreHighlight(
-      rendered,
+      renderer,
       currentTime,
       transportState,
       lastActiveIndexRef.current,
     );
-  }, [currentTime, transportState]);
+  }, [currentTime, transportState, layout]);
 
   if (!eligible) {
     return (
@@ -658,7 +735,9 @@ export function ScoreView() {
         aria-label={`Staff notation for ${song?.name ?? 'the current song'}`}
       />
       {model?.truncated && (
-        <p className="score-view__note">Showing the first {MAX_MEASURES} bars.</p>
+        <p className="score-view__note">
+          Showing the first {MODEL_MEASURE_SAFETY_CAP} bars (this file is unusually long).
+        </p>
       )}
       {model && (
         <p className="score-view__note">

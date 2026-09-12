@@ -19,6 +19,12 @@ times, so nothing shifts when a song loads or the Score/Library faces flip.
 The Guidance/Subtle/Off display-mode control is removed with it — there is no
 longer a variable-length look-ahead window to switch between.
 
+Long imported MIDI pieces are now shown as complete staff notation, including
+pieces longer than the former 64-bar cutoff. VexFlow draws the score lazily in
+row batches as the score viewport is scrolled or playback approaches a later
+section; the limit is retained only as an internal safety valve for malformed
+or unusually extreme files.
+
 ## v0.9.0 — Score / Library flip workspace (2026-09-10)
 
 UI/interaction round from [`doc/UI_OPTIMIZATION_PLAN.md`](doc/UI_OPTIMIZATION_PLAN.md).

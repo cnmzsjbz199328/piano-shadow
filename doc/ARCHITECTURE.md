@@ -212,3 +212,16 @@ boundary that keeps both true:
   keyboard is still the primary practice visual — it sits in a dock *outside*
   the flip stage. `practice-engine` / `playback-engine` / scoring are untouched;
   the view only reads `song.notes`.
+
+### Lazy score rendering (2026-09-12)
+
+The former user-visible `MAX_MEASURES` cutoff is replaced by full-model layout
+plus incremental VexFlow drawing. `buildScoreModel` and `packMeasureRows` still
+derive the complete display-only score from `song.notes`; `createScoreRenderer`
+allocates the final SVG dimensions once and appends rows in batches as the
+`ScoreSurface` viewport approaches the next undrawn row. Playback uses a pure
+measure-to-row mapping and renders a small lookahead, so automatic playback
+does not depend on manual scrolling. `MODEL_MEASURE_SAFETY_CAP` remains only as
+an absolute guard for corrupt or absurd imports, not as normal product
+pagination. The score never writes this render state back to the store, and the
+single Tone-driven `currentTime` remains authoritative.

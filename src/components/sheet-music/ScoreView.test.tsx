@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { NoteEvent, NoteSource, Performance } from '@/music-model';
 
 /**
@@ -7,7 +7,11 @@ import type { NoteEvent, NoteSource, Performance } from '@/music-model';
  * (mounting the real `useAppStore` would spin up PlaybackEngine / Tone).
  */
 const { state } = vi.hoisted(() => ({
-  state: { song: null as Performance | null },
+  state: {
+    song: null as Performance | null,
+    currentTime: 0,
+    transportState: 'idle',
+  },
 }));
 
 vi.mock('@/stores/useAppStore', () => ({
@@ -66,6 +70,8 @@ let warnSpy: ReturnType<typeof vi.spyOn>;
 
 beforeEach(() => {
   state.song = null;
+  state.currentTime = 0;
+  state.transportState = 'idle';
   // jsdom has no real 2D context; VexFlow only uses it for text measurement and
   // degrades gracefully to empty metrics when it is null.
   HTMLCanvasElement.prototype.getContext = (() => null) as never;
@@ -128,12 +134,60 @@ describe('ScoreView — imported MIDI', () => {
     expect(screen.getByText(/no notes to display/i)).toBeInTheDocument();
   });
 
-  it('flags truncation when the piece exceeds the measure cap', async () => {
-    // 80 bars of 4/4 at 120 bpm = 160 s; cap is 64 bars.
+  it('renders only an initial batch of rows on mount, not the whole long song', async () => {
     const many: NoteEvent[] = [];
-    for (let bar = 0; bar < 80; bar += 1) many.push(note(60 + (bar % 5), bar * 2, 0.5));
+    for (let bar = 0; bar < 100; bar += 1) many.push(note(60 + (bar % 5), bar * 2, 0.5));
     state.song = midiSong(many);
     render(<ScoreView />);
-    expect(await screen.findByText(/showing the first 64 bars/i)).toBeInTheDocument();
+
+    const host = await screen.findByRole('img', { name: /staff notation for fixture sonatina/i });
+    await waitFor(() => expect(host.querySelector('svg')).not.toBeNull());
+    const initialNotes = host.querySelectorAll('.score-note').length;
+
+    expect(initialNotes).toBeGreaterThan(0);
+    expect(initialNotes).toBeLessThan(many.length);
+  });
+
+  it('renders more rows as the score viewport scrolls down', async () => {
+    const many: NoteEvent[] = [];
+    for (let bar = 0; bar < 100; bar += 1) many.push(note(60 + (bar % 5), bar * 2, 0.5));
+    state.song = midiSong(many);
+    render(
+      <div className="score-surface__viewport">
+        <ScoreView />
+      </div>,
+    );
+
+    const host = await screen.findByRole('img', { name: /staff notation for fixture sonatina/i });
+    const viewport = host.closest('.score-surface__viewport');
+    expect(viewport).not.toBeNull();
+    Object.defineProperty(viewport, 'clientHeight', { configurable: true, value: 420 });
+    await waitFor(() => expect(host.querySelectorAll('.score-note').length).toBeGreaterThan(0));
+    const initialNotes = host.querySelectorAll('.score-note').length;
+
+    for (let scrollTop = 600; scrollTop <= 12000; scrollTop += 600) {
+      fireEvent.scroll(viewport as HTMLElement, { target: { scrollTop } });
+    }
+
+    await waitFor(() => expect(host.querySelectorAll('.score-note')).toHaveLength(many.length));
+    expect(host.querySelectorAll('.score-note').length).toBeGreaterThan(initialNotes);
+  });
+
+  it('keeps drawing ahead of playback without manual scrolling', async () => {
+    const many: NoteEvent[] = [];
+    for (let bar = 0; bar < 100; bar += 1) many.push(note(60 + (bar % 5), bar * 2, 0.5));
+    state.song = midiSong(many);
+    const view = render(<ScoreView />);
+
+    const host = await screen.findByRole('img', { name: /staff notation for fixture sonatina/i });
+    await waitFor(() => expect(host.querySelectorAll('.score-note').length).toBeGreaterThan(0));
+    const initialNotes = host.querySelectorAll('.score-note').length;
+
+    state.currentTime = 80 * 2;
+    state.transportState = 'playing';
+    view.rerender(<ScoreView />);
+
+    await waitFor(() => expect(host.querySelectorAll('.score-note').length).toBeGreaterThan(initialNotes));
+    expect(host.querySelectorAll('.score-note').length).toBeGreaterThanOrEqual(81);
   });
 });
