@@ -380,12 +380,25 @@ export class PlaybackEngine {
     const range = this.loopRange;
     if (!range || !this.currentPerformance) return;
     const loopLength = (range.endTime - range.startTime) / this.scale;
-    this.loopRepeatId = Tone.getTransport().scheduleRepeat((time) => {
+    // `transportSeconds`/`loopLength` are Transport-clock-domain (comparable to
+    // `Tone.getTransport().seconds`), but the callback's own `time` argument is
+    // an AudioContext-domain timestamp (correct for `instrument.attack`, wrong
+    // for anything compared against `Transport.seconds`). Track each
+    // occurrence's Transport-domain time ourselves instead of reading it off
+    // the callback — using `time` here made `getCurrentTime()` compare two
+    // different clocks, and once real session time (or a seek) grew the gap
+    // between them, playback froze at the loop start for as long as it took
+    // `Transport.seconds` to numerically catch up to the stale AudioContext
+    // value (Bug: NCL loop freeze after a cycle or two).
+    let nextBoundaryTransport = transportSeconds;
+    this.loopRepeatId = Tone.getTransport().scheduleRepeat(() => {
       if (!this.loopRange || this.loopRange !== range) return;
       instrument.releaseReferenceVoices();
-      this.loopCycleStartTransport = time;
+      const boundaryTransport = nextBoundaryTransport;
+      nextBoundaryTransport += loopLength;
+      this.loopCycleStartTransport = boundaryTransport;
       this.loopCycleStartRef = range.startTime;
-      this.scheduleLoopCycle(time, range.startTime);
+      this.scheduleLoopCycle(boundaryTransport, range.startTime);
     }, loopLength, transportSeconds);
   }
 

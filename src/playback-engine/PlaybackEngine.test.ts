@@ -71,6 +71,40 @@ describe('PlaybackEngine — note click loop', () => {
     expect(repeatCall?.[1]).toBeCloseTo(3 / 0.8);
   });
 
+  it('keeps the loop clock in Transport-domain across repeat boundaries (no AudioContext-time freeze)', () => {
+    const engine = new PlaybackEngine();
+    engine.load(buildPerformance([
+      { midi: 60, startTime: 1, duration: 0.5 },
+      { midi: 64, startTime: 3, duration: 1 },
+    ], { name: 'loop', source: 'midi-file' }));
+    const range = {
+      startTime: 1,
+      endTime: 4,
+      startRef: { anchorId: 'a', sourceIds: ['a'], startTime: 1, endTime: 1.5 },
+      endRef: { anchorId: 'b', sourceIds: ['b'], startTime: 3, endTime: 4 },
+    };
+    engine.setLoopRange(range);
+    engine.startLoop();
+
+    const loopLength = 3 / 0.8; // (endTime - startTime) / scale
+    const repeatCallback = (mocks.transport.scheduleRepeat.mock.calls as unknown as Array<[(time: number) => void]>)[0]?.[0];
+    if (!repeatCallback) throw new Error('scheduleRepeat was not called');
+
+    // Tone hands the boundary callback an AudioContext-domain timestamp, which
+    // can be arbitrarily far from Transport.seconds once real session time (or
+    // a seek) has accumulated — a fresh page load masks this gap, so passing a
+    // wildly different value here catches a regression to using it for
+    // Transport-domain bookkeeping (the loop froze at the start note once the
+    // gap grew large enough — see PlaybackEngine.ts scheduleLoopBoundary).
+    mocks.transport.seconds = loopLength;
+    repeatCallback(999999);
+
+    mocks.transport.seconds = loopLength + 0.5;
+    expect(engine.getCurrentTime()).toBeCloseTo(1 + 0.5 * 0.8);
+    mocks.transport.seconds = loopLength + 1;
+    expect(engine.getCurrentTime()).toBeCloseTo(1 + 1 * 0.8);
+  });
+
   it('rejects zero-length/out-of-song ranges and clears the active loop', () => {
     const engine = new PlaybackEngine();
     engine.load(buildPerformance([{ midi: 60, startTime: 0, duration: 2 }], { name: 'loop', source: 'midi-file' }));
