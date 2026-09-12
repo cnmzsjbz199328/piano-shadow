@@ -7,6 +7,7 @@ import { ScoreSurface } from '@/components/sheet-music/ScoreSurface';
 import { PracticeWorkspace } from '@/components/practice/PracticeWorkspace';
 import { SongLibrary } from '@/components/practice/SongLibrary';
 import { ScoreCard } from '@/components/feedback/ScoreCard';
+import { LiveFeedback } from '@/components/feedback/LiveFeedback';
 
 const KEYBOARD_LOW_MIDI = 21;
 const KEYBOARD_HIGH_MIDI = 108;
@@ -36,7 +37,9 @@ export function PracticePage() {
   const learnerActiveMidi = useAppStore((s) => s.learnerActiveMidi);
   const recognitionActiveMidi = useAppStore((s) => s.recognitionActiveMidi);
   const practiceVoice = useAppStore((s) => s.practiceVoice);
+  const mode = useAppStore((s) => s.mode);
   const waitingForMidi = useAppStore((s) => s.waitingForMidi);
+  const liveFeedback = useAppStore((s) => s.liveFeedback);
   const lastInputFeedback = useAppStore((s) => s.lastInputFeedback);
   const pressVirtualKey = useAppStore((s) => s.pressVirtualKey);
   const releaseVirtualKey = useAppStore((s) => s.releaseVirtualKey);
@@ -86,6 +89,16 @@ export function PracticePage() {
         onSurfaceChange={requestSurface}
         surfaceSwitchDisabled={isFlipping}
       />
+
+      {song && (
+        <section
+          className="practice-live-feedback"
+          aria-label="Live practice feedback"
+          aria-hidden={mode !== 'play-along' && mode !== 'wait' ? 'true' : undefined}
+        >
+          {(mode === 'play-along' || mode === 'wait') && <LiveFeedback items={liveFeedback} />}
+        </section>
+      )}
 
       <InlinePracticeResult />
 

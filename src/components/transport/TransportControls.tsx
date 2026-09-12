@@ -1,20 +1,4 @@
-import { useAppStore, type PracticeMode, type PracticeSurface, type PracticeVoice } from '@/stores/useAppStore';
-import { MIN_TEMPO_SCALE, MAX_TEMPO_SCALE } from '@/playback-engine';
-import { MidiDevicePanel } from './MidiDevicePanel';
-import { LiveFeedback } from '@/components/feedback/LiveFeedback';
-
-const MODES: Array<{ id: PracticeMode; label: string; explanation: string }> = [
-  { id: 'play-along', label: '跟拍 · Play Along', explanation: 'The reference plays at a steady pace.' },
-  { id: 'wait', label: '跟随 · Wait for me', explanation: 'The reference waits for your note.' },
-  { id: 'listen', label: 'Listen only', explanation: 'Hear the reference without recording.' },
-];
-const TEMPO_STEP = 0.05;
-
-const VOICES: Array<{ id: PracticeVoice; label: string }> = [
-  { id: 'both', label: 'Both hands' },
-  { id: 'left', label: 'Left' },
-  { id: 'right', label: 'Right' },
-];
+import { useAppStore, type PracticeSurface } from '@/stores/useAppStore';
 
 function formatTime(seconds: number): string {
   const clamped = Math.max(0, seconds);
@@ -32,27 +16,16 @@ interface TransportControlsProps {
 
 export function TransportControls({ surface, onSurfaceChange, surfaceSwitchDisabled = false }: TransportControlsProps) {
   const song = useAppStore((s) => s.song);
-  const mode = useAppStore((s) => s.mode);
-  const setMode = useAppStore((s) => s.setMode);
   const transportState = useAppStore((s) => s.transportState);
   const currentTime = useAppStore((s) => s.currentTime);
   const duration = useAppStore((s) => s.duration);
-  const tempoScale = useAppStore((s) => s.tempoScale);
-  const metronomeEnabled = useAppStore((s) => s.metronomeEnabled);
-  const countInEnabled = useAppStore((s) => s.countInEnabled);
   const isAttemptRunning = useAppStore((s) => s.isAttemptRunning);
-  const practiceVoice = useAppStore((s) => s.practiceVoice);
-  const setPracticeVoice = useAppStore((s) => s.setPracticeVoice);
   const waitingForMidi = useAppStore((s) => s.waitingForMidi);
-  const liveFeedback = useAppStore((s) => s.liveFeedback);
   const play = useAppStore((s) => s.play);
   const pause = useAppStore((s) => s.pause);
   const stop = useAppStore((s) => s.stop);
   const restart = useAppStore((s) => s.restart);
   const seek = useAppStore((s) => s.seek);
-  const setTempoScale = useAppStore((s) => s.setTempoScale);
-  const setMetronomeEnabled = useAppStore((s) => s.setMetronomeEnabled);
-  const setCountInEnabled = useAppStore((s) => s.setCountInEnabled);
   const startAttempt = useAppStore((s) => s.startAttempt);
   const finishAttempt = useAppStore((s) => s.finishAttempt);
 
@@ -109,40 +82,6 @@ export function TransportControls({ surface, onSurfaceChange, surfaceSwitchDisab
             </span>
           </div>
 
-          <details className="practice-settings">
-            <summary>Practice settings <span>{MODES.find((item) => item.id === mode)?.label}</span></summary>
-            <div className="practice-settings__body">
-              <div className="mode-tabs" role="tablist" aria-label="Practice mode">
-                {MODES.map((item) => (
-                  <button key={item.id} type="button" role="tab" aria-selected={mode === item.id} aria-pressed={mode === item.id} disabled={isAttemptRunning || recognitionActive} onClick={() => setMode(item.id)}>
-                    {item.label}
-                  </button>
-                ))}
-              </div>
-              <span className="practice-settings__help">{MODES.find((item) => item.id === mode)?.explanation}</span>
-              <div className="mode-tabs" role="group" aria-label="Which hand to practise">
-                {VOICES.map((voice) => (
-                  <button key={voice.id} type="button" aria-pressed={practiceVoice === voice.id} disabled={isAttemptRunning} onClick={() => setPracticeVoice(voice.id)}>
-                    {voice.label}
-                  </button>
-                ))}
-              </div>
-              <label className="toggle"><input type="checkbox" checked={countInEnabled} onChange={(e) => setCountInEnabled(e.target.checked)} /> Count-in</label>
-              <label className="toggle"><input type="checkbox" checked={metronomeEnabled} onChange={(e) => setMetronomeEnabled(e.target.checked)} /> Metronome</label>
-              <span className="tempo-control">
-                Tempo {Math.round(tempoScale * 100)}%
-                <button type="button" className="btn btn--icon" aria-label="Slower" disabled={tempoScale <= MIN_TEMPO_SCALE} onClick={() => setTempoScale(tempoScale - TEMPO_STEP)}>−</button>
-                <button type="button" className="btn btn--icon" aria-label="Faster" disabled={tempoScale >= MAX_TEMPO_SCALE} onClick={() => setTempoScale(tempoScale + TEMPO_STEP)}>+</button>
-              </span>
-              <details className="advanced-settings">
-                <summary>Input &amp; feedback details</summary>
-                <div className="advanced-settings__body">
-                  <MidiDevicePanel />
-                  {(mode === 'play-along' || mode === 'wait') && <LiveFeedback items={liveFeedback} />}
-                </div>
-              </details>
-            </div>
-          </details>
           {transportState === 'counting-in' && <span className="count-in-banner">Count-in…</span>}
           {waitingForMidi && <div className="wait-banner" role="status">Play {waitingForMidi.length > 1 ? 'these notes' : 'this note'} to continue…</div>}
         </>

@@ -1,8 +1,9 @@
 import { useEffect } from 'react';
-import { NavLink, Navigate, Route, Routes, useNavigate } from 'react-router-dom';
+import { NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { useAppStore } from '@/stores/useAppStore';
 import { DebugPanel } from '@/components/debug/DebugPanel';
 import { OverflowMenu } from '@/components/common/OverflowMenu';
+import { HeaderSettings } from '@/components/settings/HeaderSettings';
 import { PracticePage } from '@/pages/PracticePage';
 import { ResultsPage } from '@/pages/ResultsPage';
 import { ExperimentsPage } from '@/pages/ExperimentsPage';
@@ -13,17 +14,20 @@ export default function App() {
   const init = useAppStore((s) => s.init);
   const showDebugPanel = useAppStore((s) => s.showDebugPanel);
   const setShowDebugPanel = useAppStore((s) => s.setShowDebugPanel);
+  const location = useLocation();
   const navigate = useNavigate();
+  const isPracticeRoute = location.pathname === '/' || location.pathname === '/practice';
 
   useEffect(() => { void init(); }, [init]);
 
   return (
     <div className="app-shell">
-      <nav className="app-nav">
+      <nav className={`app-nav${isPracticeRoute ? ' app-nav--practice' : ''}`}>
         <NavLink to="/" className="app-nav__brand" aria-label="Piano Shadow">
           <span className="app-nav__brand-mark" aria-hidden>♬</span>
         </NavLink>
-        <div className="app-nav__actions">
+        <div className="app-nav__settings">{isPracticeRoute && <HeaderSettings />}</div>
+        {!isPracticeRoute && <div className="app-nav__actions">
           <OverflowMenu label="Settings">
             <div className="overflow-menu__heading">Settings</div>
             <button type="button" role="menuitem" className="overflow-menu__item" onClick={() => navigate('/experiments')}>
@@ -37,7 +41,7 @@ export default function App() {
               Debug panel <span aria-hidden>{showDebugPanel ? 'On' : 'Off'}</span>
             </button>
           </OverflowMenu>
-        </div>
+        </div>}
       </nav>
       <main className="app-main">
         <Routes>

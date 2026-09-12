@@ -60,7 +60,7 @@
 
   /* one control height, shared by buttons / selects / segmented controls */
   --control-h: 2.25rem;
-  --nav-h: 3.25rem;
+  --nav-h: 56px;
 
   /* Shared Practice workspace stage height (UI_OPTIMIZATION_PLAN.md §4.2, §12).
      The Score and Library faces share this box exactly, so switching surfaces
@@ -140,14 +140,17 @@ select {
 }
 
 .app-nav {
+  position: relative;
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--space-4);
   height: var(--nav-h);
+  min-height: var(--nav-h);
   padding: 0 var(--space-4);
   border-bottom: 1px solid var(--border);
   background: var(--bg-elevated);
+  z-index: 20;
 }
 
 .app-nav__brand {
@@ -196,6 +199,172 @@ select {
   align-items: center;
   gap: var(--space-1);
 }
+
+.app-nav__settings {
+  min-width: 0;
+  height: 100%;
+}
+
+/* --- shared Practice header settings --- */
+
+.header-settings {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  color: var(--text-dim);
+}
+
+.header-settings__nav {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  height: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.header-settings__nav::-webkit-scrollbar { display: none; }
+
+.header-settings__category {
+  flex: 0 0 auto;
+  height: 44px;
+  padding: 0 0.7rem;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.header-settings__category:hover,
+.header-settings__category[aria-expanded='true'] {
+  background: var(--bg-elevated-2);
+  color: var(--text);
+}
+
+.header-settings__category[aria-expanded='true'] {
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+.header-settings__content {
+  display: flex;
+  align-items: center;
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  margin-left: var(--space-2);
+  padding-left: var(--space-3);
+  border-left: 1px solid var(--border-subtle);
+  overflow: hidden;
+}
+
+.header-settings__back,
+.header-settings__pager-button {
+  flex: 0 0 auto;
+  height: 36px;
+  min-width: 36px;
+  padding: 0 0.45rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: var(--text-sm);
+  white-space: nowrap;
+}
+
+.header-settings__back { display: none; gap: 0.25rem; align-items: center; }
+.header-settings__back:hover,
+.header-settings__pager-button:hover:not(:disabled) { background: var(--bg-elevated-2); color: var(--text); }
+.header-settings__pager-button:disabled { opacity: 0.35; cursor: not-allowed; }
+
+.header-settings__title {
+  flex: 0 0 auto;
+  margin: 0 var(--space-3) 0 0;
+  color: var(--text);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.header-settings__body {
+  display: flex;
+  align-items: center;
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+.header-settings__page-transition {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  animation: header-settings-flip 180ms ease-out both;
+}
+
+@keyframes header-settings-flip {
+  from { opacity: 0; transform: perspective(500px) rotateY(-8deg); }
+  to { opacity: 1; transform: perspective(500px) rotateY(0); }
+}
+
+.header-settings__page {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  width: 100%;
+  gap: var(--space-2);
+  white-space: nowrap;
+}
+
+.header-settings__button-group,
+.header-settings__tempo,
+.header-settings__pager {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 0.15rem;
+}
+
+.header-settings__option {
+  flex: 0 0 auto;
+  height: 34px;
+  padding: 0 0.6rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated-2);
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.header-settings__option:hover:not(:disabled) { color: var(--text); border-color: var(--border); }
+.header-settings__option[aria-pressed='true'] { background: var(--accent-dim); border-color: var(--accent); color: var(--text); }
+.header-settings__option:disabled { opacity: 0.45; cursor: not-allowed; }
+.header-settings__icon { min-width: 34px; padding: 0; font-size: var(--text-base); }
+.header-settings__value { min-width: 3.25rem; color: var(--text); text-align: center; font-variant-numeric: tabular-nums; }
+.header-settings__small-label { color: var(--text-faint); font-size: var(--text-xs); }
+.header-settings__tempo-divider { width: 1px; height: 24px; background: var(--border-subtle); }
+.header-settings__hint { min-width: 0; overflow: hidden; color: var(--text-faint); font-size: var(--text-xs); text-overflow: ellipsis; white-space: nowrap; }
+.header-settings__pager { margin-left: auto; padding-left: var(--space-2); color: var(--text-faint); font-size: var(--text-xs); }
+.header-settings__pager-button { min-width: 30px; height: 30px; padding: 0; }
+.header-settings__page--input { overflow: hidden; }
+.midi-device--compact { display: flex; align-items: center; min-width: 0; width: 100%; gap: var(--space-2); }
+.midi-device--compact .btn-row { display: contents; }
+.midi-device--compact .btn { flex: 0 0 auto; }
+.midi-device--compact .header-settings__status { flex: 0 1 auto; min-width: 0; }
+.midi-device--compact .midi-device__select { flex: 1 1 9rem; min-width: 4rem; max-width: 15rem; }
+.header-settings__status { overflow: hidden; color: var(--text-dim); font-size: var(--text-xs); text-overflow: ellipsis; white-space: nowrap; }
+.midi-device--compact > p { display: none; }
 
 .app-main {
   flex: 1;
@@ -754,16 +923,15 @@ select {
 .practice-result .score-row { margin: var(--space-4) 0; }
 .practice-result__note { margin: var(--space-3) 0 0; font-size: var(--text-sm); }
 
-.practice-settings { border-bottom: 1px solid var(--border-subtle); color: var(--text-dim); font-size: var(--text-sm); }
-.practice-settings summary { padding: 0.55rem 0.15rem; cursor: pointer; }
-.practice-settings summary span { margin-left: 0.4rem; color: var(--text); }
-.practice-settings__body { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; padding: 0 0.15rem 0.65rem; }
-.practice-settings__help { color: var(--text-faint); font-size: var(--text-xs); }
-.tempo-control { display: inline-flex; align-items: center; gap: 0.3rem; margin-left: auto; }
-.advanced-settings { flex-basis: 100%; border-top: 1px solid var(--border-subtle); padding-top: 0.45rem; }
-.advanced-settings summary { cursor: pointer; color: var(--text-faint); }
-.advanced-settings__body { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: var(--space-3); padding-top: var(--space-3); }
-.advanced-settings__body .panel { padding: 0.6rem; }
+.practice-live-feedback {
+  min-height: 2.35rem;
+  padding: 0.35rem 0.15rem;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-dim);
+  font-size: var(--text-xs);
+}
+.practice-live-feedback .live-feedback { display: flex; gap: var(--space-3); max-height: 1.7rem; overflow: hidden; }
+.practice-live-feedback .live-feedback__item { min-width: 0; flex: 0 1 auto; }
 
 /* header row: song name (left) · mode selector (centre) · transport (right) */
 .practice-header {
@@ -1651,13 +1819,27 @@ select {
 
 /* --- responsive --- */
 
-@media (max-width: 900px) {
+@media (max-width: 1099px) {
   .app-nav {
     grid-template-columns: 1fr auto;
-    height: auto;
+    height: 60px;
+    min-height: 60px;
     padding: 0.5rem var(--space-3);
     gap: var(--space-2);
   }
+
+  .app-nav__settings:empty { display: none; }
+  .app-nav__brand { min-width: 2rem; }
+  .app-nav__settings { grid-column: 1 / -1; grid-row: 2; height: 0; }
+  .app-nav--practice { grid-template-columns: auto minmax(0, 1fr); grid-template-rows: 1fr; padding-top: 0; padding-bottom: 0; }
+  .app-nav--practice .app-nav__settings { grid-column: 2; grid-row: 1; height: 100%; }
+  .app-nav--practice .app-nav__actions { display: none; }
+
+  .header-settings__nav { width: 100%; }
+  .header-settings__category { padding: 0 0.6rem; }
+  .header-settings[data-open='true'] .header-settings__nav { display: none; }
+  .header-settings__content { margin-left: 0; padding-left: var(--space-2); border-left: 0; }
+  .header-settings__back { display: inline-flex; }
 
   /* Tablet: trim the frame and let the header toolbar wrap (§7). */
   :root {
@@ -1688,8 +1870,6 @@ select {
   .song-row__actions { justify-content: flex-start; }
   .song-row__actions { width: 100%; }
   .song-row__actions .btn { flex: 1; }
-  .tempo-control { margin-left: 0; }
-
   /* Phone: the surface fills the width and the flip degrades to an instant
      swap (§7). `PracticeWorkspace` sets data-instant to match. */
   :root {
@@ -1703,6 +1883,37 @@ select {
   .surface-switch button {
     flex: 1;
   }
+}
+
+@media (max-width: 699px) {
+  :root { --nav-h: 64px; }
+
+  .app-nav {
+    height: 64px;
+    min-height: 64px;
+    padding: 0 var(--space-2);
+  }
+
+  .app-nav__brand { padding: 0 0.35rem; }
+  .header-settings__content { gap: 0.25rem; padding-left: 0.2rem; }
+  .header-settings__back { width: 36px; min-width: 36px; padding: 0; font-size: 0; }
+  .header-settings__back span:first-child { font-size: var(--text-base); }
+  .header-settings__title { margin-right: 0.25rem; }
+  .header-settings__body { overflow: hidden; }
+  .header-settings__page { gap: 0.25rem; }
+  .header-settings__option { height: 36px; padding: 0 0.45rem; }
+  .header-settings__hint { display: none; }
+  .header-settings__small-label { display: none; }
+  .header-settings__pager { padding-left: 0; }
+  .header-settings__pager-button { min-width: 28px; }
+  .midi-device--compact { gap: 0.25rem; }
+  .midi-device--compact .header-settings__status { max-width: 5.25rem; }
+  .midi-device--compact .btn { padding: 0 0.45rem; }
+  .midi-device--compact .midi-device__select { max-width: 7rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .header-settings__page-transition { animation: none; }
 }
 
 .piano-key--feedback-correct {

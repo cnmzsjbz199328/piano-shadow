@@ -1,7 +1,7 @@
 import { useAppStore } from '@/stores/useAppStore';
 
 /** Web MIDI connection UI (spec §2.2.B): list devices, select one, show status, fail gracefully. */
-export function MidiDevicePanel() {
+export function MidiDevicePanel({ compact = false }: { compact?: boolean }) {
   const midiSupported = useAppStore((s) => s.midiSupported);
   const midiStatus = useAppStore((s) => s.midiStatus);
   const midiInputs = useAppStore((s) => s.midiInputs);
@@ -12,20 +12,19 @@ export function MidiDevicePanel() {
 
   if (!midiSupported) {
     return (
-      <div className="panel">
-        <h3>MIDI device</h3>
-        <span className="badge badge--neutral">Web MIDI not supported in this browser</span>
-        <p>You can still practice with the virtual keyboard below.</p>
+      <div className={compact ? 'midi-device midi-device--compact' : 'panel'}>
+        <span className={compact ? 'header-settings__status' : 'badge badge--neutral'} title="Web MIDI not supported in this browser" aria-label={compact ? 'Web MIDI not supported in this browser' : undefined}>{compact ? 'Web MIDI unavailable' : 'Web MIDI not supported in this browser'}</span>
+        {!compact && <p>You can still practice with the virtual keyboard below.</p>}
       </div>
     );
   }
 
   return (
-    <div className="panel">
-      <h3>MIDI device</h3>
+    <div className={compact ? 'midi-device midi-device--compact' : 'panel'}>
+      {!compact && <h3>MIDI device</h3>}
       <div className="btn-row" style={{ marginBottom: '0.6rem' }}>
-        <span className={`badge badge--dot ${midiStatus === 'connected' ? 'badge--ok' : midiStatus === 'error' ? 'badge--error' : 'badge--neutral'}`}>
-          {midiStatus}
+        <span className={compact ? 'header-settings__status' : `badge badge--dot ${midiStatus === 'connected' ? 'badge--ok' : midiStatus === 'error' ? 'badge--error' : 'badge--neutral'}`} title={midiError ?? undefined} aria-label={compact && midiError ? `MIDI error: ${midiError}` : undefined}>
+          {compact && midiError ? midiError : midiStatus}
         </span>
         {midiStatus === 'unsupported' || midiStatus === 'disconnected' || midiStatus === 'error' ? (
           <button type="button" className="btn" onClick={() => void connectMidi()}>
@@ -36,7 +35,7 @@ export function MidiDevicePanel() {
       {midiError && <p style={{ color: 'var(--wrong)' }}>{midiError}</p>}
       {midiInputs.length > 0 && (
         <select
-          className="select"
+          className={compact ? 'select midi-device__select' : 'select'}
           value={selectedMidiInputId ?? ''}
           onChange={(e) => selectMidiInput(e.target.value || null)}
           aria-label="MIDI input device"

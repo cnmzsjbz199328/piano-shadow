@@ -13,6 +13,86 @@ function midiFixture(): Buffer {
 }
 
 test.describe('Piano Shadow — focused practice workspace', () => {
+  test('uses one fixed-height header settings surface across desktop and phone layouts', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/');
+    const nav = page.locator('.app-nav');
+    const main = page.locator('.app-main');
+    const navBefore = await nav.boundingBox();
+    const mainBefore = await main.boundingBox();
+    expect(Math.round(navBefore?.height ?? 0)).toBe(56);
+
+    await page.getByRole('button', { name: 'Mode' }).click();
+    await expect(page.getByRole('region', { name: 'Mode settings' })).toBeVisible();
+    const navAfterOpen = await nav.boundingBox();
+    const mainAfterOpen = await main.boundingBox();
+    expect(navAfterOpen).toEqual(navBefore);
+    expect(mainAfterOpen).toEqual(mainBefore);
+    expect(page.locator('.practice-settings')).toHaveCount(0);
+    await page.screenshot({ path: 'doc/ui-references/header-settings/header-settings-desktop.png', fullPage: true });
+
+    await page.getByRole('button', { name: 'More' }).click();
+    await expect(page.getByRole('button', { name: 'Advanced' })).toBeVisible();
+    expect(await page.locator('body').evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await page.getByRole('button', { name: 'More' }).click();
+
+    await page.setViewportSize({ width: 320, height: 568 });
+    await expect.poll(async () => Math.round((await nav.boundingBox())?.height ?? 0)).toBe(64);
+    await page.getByRole('button', { name: 'Tempo' }).click();
+    await expect(page.getByRole('button', { name: 'Back' })).toBeVisible();
+    await expect(page.getByText('1/3')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Mode' })).toBeHidden();
+    await page.getByRole('button', { name: 'Next page' }).click();
+    await expect(page.getByText('2/3')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Count-in On' })).toBeDisabled();
+    expect(await page.locator('body').evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+
+    await page.screenshot({ path: 'doc/ui-references/header-settings/header-settings-phone.png', fullPage: true });
+  });
+
+  test('keeps every settings category reachable across the required viewport matrix', async ({ page }) => {
+    const viewports = [
+      [320, 568], [390, 844], [699, 800], [700, 800],
+      [768, 1024], [1024, 768], [1099, 800], [1100, 800],
+      [1440, 900], [1920, 1080],
+    ] as const;
+    const categories = ['Mode', 'Hands', 'Tempo', 'Input', 'More'];
+
+    for (const [width, height] of viewports) {
+      await page.setViewportSize({ width, height });
+      await page.goto('/');
+      const expectedHeight = width < 700 ? 64 : width < 1100 ? 60 : 56;
+      await expect.poll(async () => Math.round((await page.locator('.app-nav').boundingBox())?.height ?? 0)).toBe(expectedHeight);
+      expect(await page.locator('body').evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+
+      for (const category of categories) {
+        await page.getByRole('button', { name: category, exact: true }).click();
+        await expect(page.getByRole('region', { name: `${category} settings` })).toBeVisible();
+        expect(await page.locator('body').evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+        if (width < 1100) {
+          await page.getByRole('button', { name: 'Back' }).click();
+        } else {
+          await page.getByRole('button', { name: category, exact: true }).click();
+        }
+        await expect(page.getByRole('button', { name: category, exact: true })).toBeVisible();
+      }
+    }
+  });
+
+  test('keeps settings operable with reduced motion and 200 percent zoom', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.goto('/');
+    await page.evaluate(() => { document.documentElement.style.zoom = '2'; });
+
+    await page.getByRole('button', { name: 'Tempo' }).click();
+    await expect(page.getByRole('button', { name: 'Back' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Next page' })).toBeVisible();
+    await page.getByRole('button', { name: 'Next page' }).click();
+    await expect(page.getByRole('button', { name: /Count-in On/i })).toBeDisabled();
+    expect(await page.locator('body').evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  });
+
   test('opens with the 88-key feedback surface and an empty library', async ({ page }) => {
     await page.goto('/');
     await expect(page.getByLabel('Key 60')).toBeVisible();
