@@ -117,7 +117,7 @@ describe('ScoreView — imported MIDI', () => {
     state.song = midiSong();
     expect(() => render(<ScoreView />)).not.toThrow();
 
-    const host = await screen.findByRole('img', { name: /staff notation for fixture sonatina/i });
+    const host = await screen.findByRole('region', { name: /staff notation for fixture sonatina/i });
     await waitFor(() => expect(host.querySelector('svg')).not.toBeNull());
 
     // The scope-gate refusal must NOT be shown for eligible input.
@@ -140,7 +140,7 @@ describe('ScoreView — imported MIDI', () => {
     state.song = midiSong(many);
     render(<ScoreView />);
 
-    const host = await screen.findByRole('img', { name: /staff notation for fixture sonatina/i });
+    const host = await screen.findByRole('region', { name: /staff notation for fixture sonatina/i });
     await waitFor(() => expect(host.querySelector('svg')).not.toBeNull());
     const initialNotes = host.querySelectorAll('.score-note').length;
 
@@ -158,7 +158,7 @@ describe('ScoreView — imported MIDI', () => {
       </div>,
     );
 
-    const host = await screen.findByRole('img', { name: /staff notation for fixture sonatina/i });
+    const host = await screen.findByRole('region', { name: /staff notation for fixture sonatina/i });
     const viewport = host.closest('.score-surface__viewport');
     expect(viewport).not.toBeNull();
     Object.defineProperty(viewport, 'clientHeight', { configurable: true, value: 420 });
@@ -179,7 +179,7 @@ describe('ScoreView — imported MIDI', () => {
     state.song = midiSong(many);
     const view = render(<ScoreView />);
 
-    const host = await screen.findByRole('img', { name: /staff notation for fixture sonatina/i });
+    const host = await screen.findByRole('region', { name: /staff notation for fixture sonatina/i });
     await waitFor(() => expect(host.querySelectorAll('.score-note').length).toBeGreaterThan(0));
     const initialNotes = host.querySelectorAll('.score-note').length;
 

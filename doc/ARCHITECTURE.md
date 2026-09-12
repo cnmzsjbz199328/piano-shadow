@@ -225,3 +225,20 @@ does not depend on manual scrolling. `MODEL_MEASURE_SAFETY_CAP` remains only as
 an absolute guard for corrupt or absurd imports, not as normal product
 pagination. The score never writes this render state back to the store, and the
 single Tone-driven `currentTime` remains authoritative.
+
+Systems use a hybrid vertical layout: each row has a fixed minimum clearance,
+then expands from the rendered model's extreme treble/bass MIDI pitches. This
+keeps ordinary systems compact while reserving additional space for ledger
+lines, stems, and beams that would otherwise intrude into the next system.
+
+### Note Click Loop (2026-09-12)
+
+The staff remains a read-only notation surface: it does not edit `Performance`
+or its `NoteEvent[]`. It may control playback by selecting stable source-note
+anchors. `playback-engine/loopSelection.ts` owns the pure two-click state
+machine, while `PlaybackEngine` owns the validated `[startRef, endRef)` audio
+range and Tone.Transport rescheduling. The ten-second deadline is UI
+interaction state measured with an absolute monotonic deadline; it is not a
+second music clock. Formal scored attempts clear an active loop before they
+start, so repeated reference time is never silently written into a practice
+attempt.

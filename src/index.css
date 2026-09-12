@@ -2176,6 +2176,7 @@ select {
 .score-view__host {
   width: 100%;
   overflow-x: auto;
+  touch-action: pan-x pan-y;
 }
 .score-view__host svg {
   display: block;
@@ -2192,4 +2193,54 @@ select {
 .score-view__host svg .score-note--active text {
   fill: var(--accent-hover) !important;
   stroke: var(--accent-hover) !important;
+}
+
+/* Note Click Loop feedback is deliberately separate from playback highlighting:
+   a shared beam may contain several notes, while only the selected notehead
+   receives the A/B marker. */
+.score-view__host svg .score-note {
+  cursor: pointer;
+  pointer-events: all;
+}
+
+.score-view__host svg .score-note--loop-pending {
+  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--accent) 75%, transparent));
+}
+
+.score-view__host svg .score-note--loop-pending path,
+.score-view__host svg .score-note--loop-pending text {
+  fill: var(--accent) !important;
+  stroke: var(--accent) !important;
+}
+
+.score-view__host svg .score-note--loop-range path:first-of-type {
+  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--accent) 35%, transparent));
+}
+
+.score-view__host svg .score-note--loop-start,
+.score-view__host svg .score-note--loop-end {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.score-view__host svg .score-loop-marker {
+  fill: var(--accent) !important;
+  stroke: none !important;
+  font-size: 13px;
+  font-weight: 700;
+  pointer-events: none;
+}
+
+.score-loop-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-2);
+  padding: 0.45rem 0.65rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 55%, var(--border));
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--accent) 10%, var(--bg-elevated));
+  color: var(--text);
+  font-size: var(--text-sm);
 }

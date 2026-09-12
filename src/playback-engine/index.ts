@@ -14,3 +14,13 @@ export {
   type PlaybackState,
   type PlaybackEngineOptions,
 } from './PlaybackEngine';
+export {
+  LOOP_SELECTION_TIMEOUT_MS,
+  clearLoopSelection,
+  expireLoopSelection,
+  initialLoopSelection,
+  selectLoopNote,
+  type LoopNoteRef,
+  type LoopRange,
+  type LoopSelectionState,
+} from './loopSelection';

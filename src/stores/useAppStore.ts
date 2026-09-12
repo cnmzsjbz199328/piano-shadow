@@ -1,7 +1,17 @@
 import { create } from 'zustand';
 import { buildPerformance, midiToNoteName, type NoteEvent, type Performance } from '@/music-model';
 import { parseMidiFile, loadDemoPerformance, MidiImportError } from '@/midi';
-import { PlaybackEngine, type PlaybackState as EnginePlaybackState } from '@/playback-engine';
+import {
+  PlaybackEngine,
+  clearLoopSelection,
+  expireLoopSelection,
+  initialLoopSelection,
+  selectLoopNote,
+  LOOP_SELECTION_TIMEOUT_MS,
+  type LoopNoteRef,
+  type LoopSelectionState,
+  type PlaybackState as EnginePlaybackState,
+} from '@/playback-engine';
 import {
   VirtualKeyboardAdapter,
   WebMidiAdapter,
@@ -106,6 +116,8 @@ interface AppState {
    *  (music-model/inferHands). The filter is applied to a clone of `song.notes`
    *  BEFORE the engine / `evaluatePerformance` see it — they stay pure. */
   practiceVoice: PracticeVoice;
+  loopSelection: LoopSelectionState;
+  loopNotice: string | null;
 
   // actions
   init(): Promise<void>;
@@ -128,6 +140,8 @@ interface AppState {
   setShowDebugPanel(on: boolean): void;
   setSoundEnabled(on: boolean): void;
   setPracticeVoice(voice: PracticeVoice): void;
+  selectLoopNote(note: LoopNoteRef): void;
+  clearLoop(): void;
   setInputLatencyMs(ms: number): void;
 
   connectMidi(): Promise<void>;
@@ -196,6 +210,18 @@ let recognitionUnsubscribers: Array<() => void> = [];
 let recognitionSessionId = 0;
 const recognitionPending = new Map<number, Array<{ startTime: number; velocity?: number }>>();
 let recognitionRawNotes: Array<{ midi: number; startTime: number; duration: number; velocity?: number }> = [];
+let loopSelectionTimer: ReturnType<typeof setTimeout> | null = null;
+
+function clearLoopSelectionTimer(): void {
+  if (loopSelectionTimer !== null) clearTimeout(loopSelectionTimer);
+  loopSelectionTimer = null;
+}
+
+function clearLoopState(): void {
+  clearLoopSelectionTimer();
+  engine.clearLoopRange();
+  useAppStore.setState((s) => ({ loopSelection: clearLoopSelection(s.loopSelection), loopNotice: null }));
+}
 
 /**
  * Hard ceiling on any single recognised note's duration (seconds). No musically
@@ -393,6 +419,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   debug: { playheadTime: 0, lastMidiEvent: null, lastMatchingDecisions: [] },
   soundEnabled: true,
   practiceVoice: 'both',
+  loopSelection: initialLoopSelection(),
+  loopNotice: null,
 
   recognitionState: 'idle',
   recognitionSource: null,
@@ -425,6 +453,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     try {
       const performance = parseMidiFile(bytes, name ? { name } : undefined);
       const record = await persistence.saveSong(performance, false);
+      clearLoopState();
       loadSongIntoEngine(performance);
       set({
         song: performance,
@@ -454,6 +483,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     try {
       const performance = loadDemoPerformance(id);
       const record = await persistence.saveSong(performance, true);
+      clearLoopState();
       loadSongIntoEngine(performance);
       set({
         song: performance,
@@ -478,6 +508,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   async loadSavedSong(id) {
     const record = await persistence.getSong(id);
     if (!record) return;
+    clearLoopState();
     loadSongIntoEngine(record.performance);
     // Choosing a song from the library flips to the score face (UI_OPTIMIZATION_PLAN.md §5.1).
     set({ song: record.performance, songRecord: record, duration: record.performance.duration, currentTime: 0, lastResult: null, waitingForMidi: null, liveFeedback: [], lastInputFeedback: null, practiceSurface: 'score' });
@@ -497,6 +528,39 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ mode, waitingForMidi: null, liveFeedback: [], lastInputFeedback: null });
   },
 
+  selectLoopNote(note) {
+    const now = performance.now();
+    const next = selectLoopNote(get().loopSelection, note, now);
+    if (next === get().loopSelection) return;
+    clearLoopSelectionTimer();
+    set({ loopSelection: next, loopNotice: null });
+    if (next.status === 'idle') {
+      engine.clearLoopRange();
+      return;
+    }
+    if (next.status === 'awaiting-second') {
+      const version = next.version;
+      loopSelectionTimer = setTimeout(() => {
+        const current = get().loopSelection;
+        if (current.status !== 'awaiting-second' || current.version !== version) return;
+        const expired = expireLoopSelection(current, performance.now());
+        if (expired !== current) set({ loopSelection: expired, loopNotice: 'The loop selection timed out.' });
+        loopSelectionTimer = null;
+      }, LOOP_SELECTION_TIMEOUT_MS + 1);
+      return;
+    }
+    if (next.status === 'looping') {
+      if (!engine.setLoopRange(next.range) || !engine.startLoop()) {
+        engine.clearLoopRange();
+        set({ loopSelection: clearLoopSelection(next), loopNotice: 'This note range cannot be looped.' });
+      }
+    }
+  },
+
+  clearLoop() {
+    clearLoopState();
+  },
+
   setPracticeSurface(surface) {
     if (get().practiceSurface === surface) return;
     set({ practiceSurface: surface });
@@ -511,16 +575,20 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   stop() {
     engine.stop();
-    set({ waitingForMidi: null, liveFeedback: [], lastInputFeedback: null });
+    clearLoopSelectionTimer();
+    set({ waitingForMidi: null, liveFeedback: [], lastInputFeedback: null, loopSelection: clearLoopSelection(get().loopSelection), loopNotice: null });
   },
   restart() {
     if (!canStartPlayback()) return;
     engine.restart();
-    set({ waitingForMidi: null, liveFeedback: [], lastInputFeedback: null });
+    clearLoopSelectionTimer();
+    set({ waitingForMidi: null, liveFeedback: [], lastInputFeedback: null, loopSelection: clearLoopSelection(get().loopSelection), loopNotice: null });
   },
   seek(seconds) {
     engine.seek(seconds);
-    set({ currentTime: engine.getCurrentTime(), waitingForMidi: null, liveFeedback: [], lastInputFeedback: null });
+    const loop = engine.getLoopRange();
+    if (!loop && get().loopSelection.status === 'looping') clearLoopSelectionTimer();
+    set({ currentTime: engine.getCurrentTime(), waitingForMidi: null, liveFeedback: [], lastInputFeedback: null, ...(loop ? {} : { loopSelection: clearLoopSelection(get().loopSelection), loopNotice: null }) });
   },
 
   setTempoScale(scale) {
@@ -554,6 +622,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ practiceVoice: voice });
     const { song } = get();
     if (!song) return;
+    clearLoopState();
     // Re-load the filtered reference and rewind — the engine now holds only the
     // chosen hand's notes. In-memory only; not persisted.
     loadSongIntoEngine(song);
@@ -596,6 +665,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   startAttempt() {
     const { song, mode, selectedMidiInputId, practiceVoice } = get();
     if (!song || mode === 'listen' || isRecognitionActive(get())) return;
+    // Formal scoring attempts never span a repeating reference timeline (D01).
+    clearLoopState();
     const source = selectedMidiInputId && midiAdapter.status === 'connected' ? 'midi-device' : 'virtual-keyboard';
     recorder = new PerformanceRecorder(source);
     recorder.attach(keyboardAdapter);
@@ -632,6 +703,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   async startRecognition(source = 'microphone') {
     if (get().recognitionState === 'initializing' || get().recognitionState === 'listening') return;
     const sessionId = ++recognitionSessionId;
+    clearLoopState();
     clearRecognitionListeners();
     recognitionRawNotes = [];
     recognitionClockStart = performance.now();
@@ -725,6 +797,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     const name = `Unnamed performance · ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
     const performance = buildPerformance(rawNotes, { name, source, idPrefix: 'recognised' });
     const record = await persistence.saveSong(performance, false);
+    clearLoopState();
     loadSongIntoEngine(performance);
     set({ song: performance, songRecord: record, duration: performance.duration, currentTime: 0, lastResult: null, recognitionState: 'stopped', recognitionActiveMidi: [], recognitionElapsed: stopTime, recognitionLevel: 0 });
     await get().refreshSavedSongs();
@@ -743,8 +816,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   clearSong() {
     engine.stop();
+    clearLoopSelectionTimer();
     // No song left to notate — fall back to the library face (UI_OPTIMIZATION_PLAN.md §5.1).
-    set({ song: null, songRecord: null, duration: 0, currentTime: 0, lastResult: null, lastLearnerPerformance: null, attemptHistory: [], mode: 'listen', practiceSurface: 'library', waitingForMidi: null, liveFeedback: [], lastInputFeedback: null });
+    set({ song: null, songRecord: null, duration: 0, currentTime: 0, lastResult: null, lastLearnerPerformance: null, attemptHistory: [], mode: 'listen', practiceSurface: 'library', waitingForMidi: null, liveFeedback: [], lastInputFeedback: null, loopSelection: clearLoopSelection(get().loopSelection), loopNotice: null });
   },
 }));
 

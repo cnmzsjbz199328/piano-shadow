@@ -2,6 +2,11 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Accidental, RenderContext, Stave, StaveConnector, StaveNote } from 'vexflow';
 import type { NoteEvent, Performance } from '@/music-model';
 import { gridSecondsFor, quantizeNotes } from '@/quantization';
+import {
+  initialLoopSelection,
+  type LoopNoteRef,
+  type LoopSelectionState,
+} from '@/playback-engine';
 import { useAppStore } from '@/stores/useAppStore';
 import {
   decomposeRest,
@@ -57,11 +62,16 @@ const INITIAL_RENDERED_ROWS = 6;
 const SCROLL_LOOKAHEAD_PX = 600;
 /** Keep playback notation ahead of the currently highlighted system. */
 const PLAYBACK_LOOKAHEAD_ROWS = 2;
-const SCORE_PAD = 10;
+const SCORE_PAD = 24;
 const SCORE_CLEF_EXTRA = 64;
 const SCORE_TREBLE_Y = 0;
 const SCORE_BASS_Y = 92;
-const SCORE_ROW_HEIGHT = 210;
+const STAFF_HEIGHT = 40;
+/** Minimum air above/below a normal grand-staff system. */
+const MIN_SYSTEM_TOP_PADDING = 48;
+const MIN_SYSTEM_BOTTOM_PADDING = 68;
+/** Approximate pixels per semitone outside the comfortable staff range. */
+const EXTREME_PITCH_PADDING = 3.5;
 
 const SHARP_SPELLING = [
   'c',
@@ -94,6 +104,10 @@ interface Tick {
   /** Reference-timeline span represented by this rendered note/chord. */
   startTime?: number;
   endTime?: number;
+  sourceIds?: string[];
+  anchorId?: string;
+  minMidi?: number;
+  maxMidi?: number;
 }
 
 interface Measure {
@@ -240,6 +254,10 @@ function buildClefMeasure(
       // for the whole sounding interval even when the approximate notation
       // clips its displayed value.
       endTime: Math.max(...group.notes.map((n) => n.startTime + n.duration)),
+      sourceIds: sorted.map((n) => n.id),
+      anchorId: `onset:${group.onset.toFixed(6)}`,
+      minMidi: Math.min(...sorted.map((n) => n.midi)),
+      maxMidi: Math.max(...sorted.map((n) => n.midi)),
     });
 
     position = group.onset + noteValueSeconds(value, bpm);
@@ -337,6 +355,12 @@ interface VexModule {
       params?: { alignRests?: boolean; autoBeam?: boolean },
     ): unknown;
   };
+  Beam: {
+    generateBeams(notes: StaveNote[], config: { groups: unknown[]; stemDirection: number }): Array<{
+      setContext(context: RenderContext): { draw(): unknown };
+    }>;
+    getDefaultBeamGroups(timeSignature: string): unknown[];
+  };
 }
 
 interface RenderedScoreNote {
@@ -346,6 +370,7 @@ interface RenderedScoreNote {
   /** The complete treble+bass system containing this note. */
   systemRow: number;
   systemElement?: SVGElement;
+  ref: LoopNoteRef;
 }
 
 interface RenderedScore {
@@ -359,7 +384,8 @@ interface ScoreLayout {
   rowWidths: number[];
   width: number;
   totalHeight: number;
-  rowHeight: number;
+  rowHeights: number[];
+  rowTops: number[];
 }
 
 interface ScoreRenderer {
@@ -382,6 +408,7 @@ function updateScoreHighlight(
   currentTime: number,
   transportState: string,
   previousActiveIndex: number | null,
+  suppressFollow = false,
 ): number | null {
   if (!rendered) return null;
 
@@ -394,7 +421,7 @@ function updateScoreHighlight(
     if (active && activeIndex === null) activeIndex = index;
   });
 
-  if (activeIndex !== null && activeIndex !== previousActiveIndex) {
+  if (!suppressFollow && activeIndex !== null && activeIndex !== previousActiveIndex) {
     // Center the complete system when playback enters a new highlighted area
     // or when a seek lands on a clipped note. This prevents the lower stave
     // from remaining hidden while avoiding a jump for every note in one row.
@@ -428,6 +455,7 @@ function drawVoice(
   ink: string,
   clef: 'treble' | 'bass',
   systemRow: number,
+  timeSignature: string,
 ): RenderedScoreNote[] {
   const staveNotes = ticks.map((tick) => {
     const staveNote = new VF.StaveNote({
@@ -444,9 +472,24 @@ function drawVoice(
     return staveNote;
   });
   if (staveNotes.length === 0) return [];
+  let beams: Array<{ setContext(context: RenderContext): { draw(): unknown } }> = [];
+  try {
+    // Attach the beams before VexFlow draws the notes. This is what suppresses
+    // individual flags; drawing a Beam after FormatAndDraw leaves the flags in
+    // the SVG and creates the doubled appearance seen in dense passages.
+    beams = VF.Beam.generateBeams(staveNotes, {
+      groups: VF.Beam.getDefaultBeamGroups(timeSignature),
+      // Treble stems point up and bass stems point down; the inverse makes the
+      // two voices visibly cross through the grand staff.
+      stemDirection: clef === 'treble' ? 1 : -1,
+    });
+  } catch {
+    // An approximate bar may not have a beamable tick grouping.
+  }
   // FormatAndDraw builds a SOFT-mode Voice internally, so an approximate bar
   // that does not sum to its exact length still renders instead of throwing.
-  VF.Formatter.FormatAndDraw(ctx, stave, staveNotes, { alignRests: true });
+  VF.Formatter.FormatAndDraw(ctx, stave, staveNotes, { alignRests: true, autoBeam: false });
+  beams.forEach((beam) => beam.setContext(ctx).draw());
 
   return staveNotes.flatMap((staveNote, index) => {
     const tick = ticks[index];
@@ -455,7 +498,18 @@ function drawVoice(
     }
     const element = staveNote.getSVGElement();
     return element
-      ? [{ element, startTime: tick.startTime, endTime: tick.endTime, systemRow }]
+      ? [{
+          element,
+          startTime: tick.startTime,
+          endTime: tick.endTime,
+          systemRow,
+          ref: {
+            anchorId: tick.anchorId ?? `note:${tick.startTime}`,
+            sourceIds: tick.sourceIds ?? [],
+            startTime: tick.startTime,
+            endTime: tick.endTime,
+          },
+        }]
       : [];
   });
 }
@@ -471,14 +525,35 @@ function createScoreLayout(model: ScoreModel, containerWidth: number): ScoreLayo
   // owns horizontal scrolling, so preserve note spacing instead of shrinking
   // the notation into collisions.
   const width = Math.max(viewportWidth, ...rowWidths.map((rowWidth) => rowWidth + SCORE_PAD * 2));
-  const rowHeight = SCORE_ROW_HEIGHT;
-  const totalHeight = rows.length * rowHeight + SCORE_PAD * 2;
+  const rowHeights = rows.map((row) => {
+    const trebleMax = Math.max(
+      77,
+      ...row.measures.flatMap((measure) => measure.treble.map((tick) => tick.maxMidi ?? 77)),
+    );
+    const bassMin = Math.min(
+      50,
+      ...row.measures.flatMap((measure) => measure.bass.map((tick) => tick.minMidi ?? 50)),
+    );
+    const topPadding = MIN_SYSTEM_TOP_PADDING + Math.max(0, trebleMax - 77) * EXTREME_PITCH_PADDING;
+    const bottomPadding = MIN_SYSTEM_BOTTOM_PADDING + Math.max(0, 50 - bassMin) * EXTREME_PITCH_PADDING;
+    // The grand staff itself is fixed; only the clearance around it expands.
+    return topPadding + SCORE_BASS_Y + STAFF_HEIGHT + bottomPadding;
+  });
+  const rowTops: number[] = [];
+  let rowOffset = 0;
+  rows.forEach((_, rowIndex) => {
+    const row = rowHeights[rowIndex] ?? 0;
+    const topPadding = row - SCORE_BASS_Y - STAFF_HEIGHT - MIN_SYSTEM_BOTTOM_PADDING;
+    rowTops.push(SCORE_PAD + rowOffset + topPadding);
+    rowOffset += row;
+  });
+  const totalHeight = rowOffset + SCORE_PAD * 2;
   const measureRows: number[] = [];
   rows.forEach((row, rowIndex) => {
     row.measures.forEach(() => measureRows.push(rowIndex));
   });
 
-  return { model, rows, measureRows, rowWidths, width, totalHeight, rowHeight };
+  return { model, rows, measureRows, rowWidths, width, totalHeight, rowHeights, rowTops };
 }
 
 function createScoreRenderer(
@@ -513,7 +588,7 @@ function createScoreRenderer(
         const minimumRowWidth = layout.rowWidths[row] ?? layout.width;
         const usableWidth = Math.max(0, layout.width - SCORE_PAD * 2);
         const extraPerMeasure = Math.max(0, usableWidth - minimumRowWidth) / layoutRow.measures.length;
-        const rowTop = SCORE_PAD + row * layout.rowHeight;
+        const rowTop = layout.rowTops[row] ?? SCORE_PAD;
         let x = SCORE_PAD;
 
         for (let mi = 0; mi < layoutRow.measures.length; mi += 1) {
@@ -552,8 +627,8 @@ function createScoreRenderer(
 
           try {
             scoreRenderer.notes.push(
-              ...drawVoice(VF, ctx, treble, measure.treble, ink, 'treble', row),
-              ...drawVoice(VF, ctx, bass, measure.bass, ink, 'bass', row),
+              ...drawVoice(VF, ctx, treble, measure.treble, ink, 'treble', row, layout.model.timeSignature),
+              ...drawVoice(VF, ctx, bass, measure.bass, ink, 'bass', row, layout.model.timeSignature),
             );
           } catch {
             // One malformed bar must not blank the whole score; leave the empty
@@ -568,6 +643,10 @@ function createScoreRenderer(
       scoreRenderer.notes.forEach((note, index) => {
         note.element.classList.add('score-note');
         note.element.dataset.scoreNoteIndex = String(index);
+        note.element.dataset.loopAnchorId = note.ref.anchorId;
+        note.element.setAttribute('tabindex', '0');
+        note.element.setAttribute('role', 'button');
+        note.element.setAttribute('aria-label', `Select note at ${note.ref.startTime.toFixed(2)} seconds`);
         note.systemElement = systemElements[note.systemRow];
       });
     },
@@ -598,19 +677,86 @@ function renderPlaybackAhead(
   }
 }
 
+function findRenderedNote(
+  renderer: ScoreRenderer,
+  target: EventTarget | null,
+  x: number,
+  y: number,
+): RenderedScoreNote | null {
+  const targetElement = target instanceof Element
+    ? target.closest<SVGElement>('.score-note')
+    : null;
+  const indexed = targetElement?.dataset.scoreNoteIndex;
+  if (indexed !== undefined) return renderer.notes[Number(indexed)] ?? null;
+
+  // SVG hit areas can overlap in dense chords. Choose by geometric distance,
+  // never by DOM paint order. In jsdom rects are empty, so this naturally
+  // falls back to the target lookup above in tests.
+  let best: RenderedScoreNote | null = null;
+  let bestDistance = Infinity;
+  for (const note of renderer.notes) {
+    const rect = note.element.getBoundingClientRect();
+    if (rect.width <= 0 && rect.height <= 0) continue;
+    const dx = x - (rect.left + rect.width / 2);
+    const dy = y - (rect.top + rect.height / 2);
+    const distance = dx * dx + dy * dy;
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      best = note;
+    }
+  }
+  return best;
+}
+
+function applyLoopDecorations(renderer: ScoreRenderer, selection: LoopSelectionState): void {
+  for (const note of renderer.notes) {
+    const first = selection.status === 'awaiting-second' && note.ref.anchorId === selection.first.anchorId;
+    const range = selection.status === 'looping' &&
+      note.ref.startTime >= selection.range.startTime && note.ref.startTime < selection.range.endTime;
+    const start = selection.status === 'looping' && note.ref.anchorId === selection.range.startRef.anchorId;
+    const end = selection.status === 'looping' && note.ref.anchorId === selection.range.endRef.anchorId;
+    note.element.classList.toggle('score-note--loop-pending', first);
+    note.element.classList.toggle('score-note--loop-range', range);
+    note.element.classList.toggle('score-note--loop-start', start);
+    note.element.classList.toggle('score-note--loop-end', end);
+    note.element.querySelectorAll('.score-loop-marker').forEach((marker) => marker.remove());
+    if (start || end) {
+      const marker = note.element.ownerDocument.createElementNS('http://www.w3.org/2000/svg', 'text');
+      marker.classList.add('score-loop-marker');
+      const box = 'getBBox' in note.element
+        ? (note.element as SVGGraphicsElement).getBBox()
+        : { x: 0, y: 0, width: 0, height: 0 };
+      marker.setAttribute('x', String(box.x + box.width / 2));
+      marker.setAttribute('y', String(box.y - 4));
+      marker.textContent = start ? 'A' : 'B';
+      marker.setAttribute('aria-hidden', 'true');
+      note.element.appendChild(marker);
+    }
+  }
+}
+
 export function ScoreView() {
   const song = useAppStore((s) => s.song);
   const currentTime = useAppStore((s) => (s as { currentTime?: number }).currentTime ?? 0);
   const transportState = useAppStore(
     (s) => (s as { transportState?: string }).transportState ?? 'idle',
   );
+  const loopSelection = useAppStore((s) => (s as { loopSelection?: LoopSelectionState }).loopSelection ?? initialLoopSelection());
+  const selectLoopNoteAction = useAppStore((s) => (s as { selectLoopNote?: (note: LoopNoteRef) => void }).selectLoopNote);
+  const clearLoopAction = useAppStore((s) => (s as { clearLoop?: () => void }).clearLoop);
+  const loopNotice = useAppStore((s) => (s as { loopNotice?: string | null }).loopNotice ?? null);
   const hostRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
   const [renderFailed, setRenderFailed] = useState(false);
   const renderedScoreRef = useRef<ScoreRenderer | null>(null);
   const lastActiveIndexRef = useRef<number | null>(null);
   const playbackRef = useRef({ currentTime, transportState });
+  const loopSelectionRef = useRef(loopSelection);
+  const selectLoopNoteRef = useRef(selectLoopNoteAction);
+  const pointerRef = useRef<{ x: number; y: number } | null>(null);
   playbackRef.current = { currentTime, transportState };
+  loopSelectionRef.current = loopSelection;
+  selectLoopNoteRef.current = selectLoopNoteAction;
 
   const eligible = song != null && song.sourceType === 'midi-file';
   const model = useMemo(
@@ -668,7 +814,10 @@ export function ScoreView() {
           playbackRef.current.currentTime,
           playbackRef.current.transportState,
           null,
+          loopSelectionRef.current.status === 'awaiting-second',
         );
+
+        applyLoopDecorations(renderer, loopSelectionRef.current);
 
         const scrollContainer = host.closest('.score-surface__viewport') as HTMLElement | null;
         const onScroll = (): void => {
@@ -676,13 +825,40 @@ export function ScoreView() {
           const viewportBottom = scrollContainer
             ? scrollContainer.scrollTop + scrollContainer.clientHeight
             : host.scrollTop + host.clientHeight;
-          const nextRowTop = SCORE_PAD + (renderer.lastRenderedRow + 1) * layout.rowHeight;
+          const nextRowTop = layout.rowTops[renderer.lastRenderedRow + 1] ?? layout.totalHeight;
           if (viewportBottom >= nextRowTop - SCROLL_LOOKAHEAD_PX) {
             renderer.renderUpTo(renderer.lastRenderedRow + ROWS_PER_BATCH);
           }
         };
         scrollContainer?.addEventListener('scroll', onScroll);
+        const onPointerDown = (event: PointerEvent): void => {
+          pointerRef.current = { x: event.clientX, y: event.clientY };
+        };
+        const onPointerUp = (event: PointerEvent): void => {
+          const start = pointerRef.current;
+          pointerRef.current = null;
+          if (!start || Math.hypot(event.clientX - start.x, event.clientY - start.y) > 10) return;
+          const selected = findRenderedNote(renderer, event.target, event.clientX, event.clientY);
+          if (selected) selectLoopNoteRef.current?.(selected.ref);
+        };
+        const onKeyDown = (event: KeyboardEvent): void => {
+          if (event.key !== 'Enter' && event.key !== ' ') return;
+          const selected = findRenderedNote(renderer, event.target, 0, 0);
+          if (!selected) return;
+          event.preventDefault();
+          selectLoopNoteRef.current?.(selected.ref);
+        };
+        host.addEventListener('pointerdown', onPointerDown);
+        host.addEventListener('pointerup', onPointerUp);
+        host.addEventListener('keydown', onKeyDown);
         removeScrollListener = () => scrollContainer?.removeEventListener('scroll', onScroll);
+        const removeInteractions = () => {
+          host.removeEventListener('pointerdown', onPointerDown);
+          host.removeEventListener('pointerup', onPointerUp);
+          host.removeEventListener('keydown', onKeyDown);
+        };
+        const oldRemove = removeScrollListener;
+        removeScrollListener = () => { oldRemove(); removeInteractions(); };
       } catch {
         if (!cancelled) {
           host.replaceChildren();
@@ -706,14 +882,16 @@ export function ScoreView() {
     if (!renderer || !layout) return;
 
     renderPlaybackAhead(renderer, layout, currentTime, transportState);
+    applyLoopDecorations(renderer, loopSelection);
 
     lastActiveIndexRef.current = updateScoreHighlight(
       renderer,
       currentTime,
       transportState,
       lastActiveIndexRef.current,
+      loopSelection.status === 'awaiting-second',
     );
-  }, [currentTime, transportState, layout]);
+  }, [currentTime, transportState, layout, loopSelection]);
 
   if (!eligible) {
     return (
@@ -722,6 +900,12 @@ export function ScoreView() {
       </div>
     );
   }
+
+  const loopStatus = loopSelection.status === 'awaiting-second'
+    ? '已选起点，请在 10 秒内选择另一音符。'
+    : loopSelection.status === 'looping'
+      ? `循环中：${loopSelection.range.startTime.toFixed(2)}s – ${loopSelection.range.endTime.toFixed(2)}s`
+      : loopNotice;
 
   return (
     <div className="score-view">
@@ -734,10 +918,18 @@ export function ScoreView() {
       {!renderFailed && !model && (
         <p className="score-view__note">This song has no notes to display.</p>
       )}
+      {loopStatus && (
+        <div className="score-loop-status" role="status" aria-live="polite">
+          <span>{loopStatus}</span>
+          {loopSelection.status === 'looping' && clearLoopAction && (
+            <button type="button" className="btn btn--quiet btn--sm" onClick={clearLoopAction}>Clear loop</button>
+          )}
+        </div>
+      )}
       <div
         ref={hostRef}
         className="score-view__host"
-        role="img"
+        role="region"
         aria-label={`Staff notation for ${song?.name ?? 'the current song'}`}
       />
       {model?.truncated && (
