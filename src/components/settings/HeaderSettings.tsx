@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useId, useRef, useState, type CompositionEvent, type FocusEvent, type PointerEvent, type ReactNode, type SyntheticEvent } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type CompositionEvent, type FocusEvent, type PointerEvent, type ReactNode, type SyntheticEvent } from 'react';
+import { createPortal } from 'react-dom';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { MIN_TEMPO_SCALE, MAX_TEMPO_SCALE } from '@/playback-engine';
 import { useAppStore, type PracticeMode, type PracticeVoice } from '@/stores/useAppStore';
@@ -28,6 +29,12 @@ const VOICES: Array<{ id: PracticeVoice; label: string }> = [
 
 const TEMPO_STEP = 0.1;
 export const SETTINGS_IDLE_TIMEOUT_MS = 10_000;
+
+/** `App.tsx` mounts an empty div with this id inside `<nav>` on the Practice
+ * route; `HeaderSettings` portals itself there so the categories and shared
+ * content area render as part of the nav bar instead of a separate row
+ * below it. Falls back to rendering in place until the slot is found. */
+const NAV_SLOT_ID = 'header-settings-slot';
 
 interface HeaderSettingsProps {
   /** The normal Practice controls shown while no category is selected. */
@@ -65,6 +72,8 @@ export function HeaderSettings({ defaultContent = null }: HeaderSettingsProps) {
   const phone = useMediaQuery('(max-width: 699px)');
   const [openCategory, setOpenCategory] = useState<SettingsCategory | null>(null);
   const [pages, setPages] = useState<Partial<Record<SettingsCategory, number>>>({});
+  const [navSlot, setNavSlot] = useState<HTMLElement | null>(null);
+  useLayoutEffect(() => { setNavSlot(document.getElementById(NAV_SLOT_ID)); }, []);
   const panelId = `header-settings-panel-${useId().replace(/:/g, '')}`;
   const rootRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -362,7 +371,7 @@ export function HeaderSettings({ defaultContent = null }: HeaderSettingsProps) {
   const activeLabel = CATEGORIES.find((category) => category.id === openCategory)?.label;
   const totalPages = openCategory ? pageCount(openCategory, phone) : 1;
 
-  return (
+  const content = (
     <div
       ref={rootRef}
       className={`header-settings${openCategory ? ' header-settings--open' : ''}`}
@@ -414,4 +423,6 @@ export function HeaderSettings({ defaultContent = null }: HeaderSettingsProps) {
       {!openCategory && <div className="header-settings__default" role="region" aria-label="Practice controls">{defaultContent}</div>}
     </div>
   );
+
+  return navSlot ? createPortal(content, navSlot) : content;
 }

@@ -2,6 +2,31 @@
 
 ## Unreleased — simplify the Practice surface
 
+`HeaderSettings` now docks inside `<nav class="app-nav">` itself, at every
+width, instead of a separate row inside `.practice-page` below it — it
+portals its rendered output into a slot `App.tsx` mounts inside the nav on
+the Practice route, so `PracticePage` keeps owning the transport's local UI
+state (`isFlipping`, etc.) without lifting it to the store just to relocate
+the markup. The nav grows to fit whatever `HeaderSettings` needs at each
+breakpoint instead of staying pinned to the old fixed bar height; the
+category-nav row and the shared content row now wrap onto their own lines
+below 1100px (previously only below 640px), since squeezing both next to
+the brand icon at tablet widths was invisibly clipping the Library button
+off the right edge (`overflow: hidden` hid it from view without registering
+as page-level horizontal overflow, so the existing "no page scroll" e2e
+check never caught it). The Score/Library switch is now pinned to the
+row's right edge unconditionally (`margin-left: auto`, not just under
+640px) — previously its position depended on whether the seek-bar flex
+item was in the DOM, so it visibly jumped left/right between "no song
+loaded" and "song loaded".
+
+The Library's empty state no longer offers built-in demo melodies ("C Major
+Five-Finger", "Rhythm Study", "Twinkle, Twinkle") as a way to start
+practicing without an import — that shortcut is removed by request. The
+underlying demo assets, the store's `loadDemo` action, and the Microphone
+Lab's own "Demo melody" picker are untouched, so spec §22's built-in demo
+requirement still holds via `/lab`.
+
 The scattered Practice settings entries (the collapsible "Practice settings"
 details under the transport, its nested "Input & feedback details", and the
 top-right gear menu on the Practice route) are replaced by one header settings

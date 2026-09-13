@@ -1,6 +1,5 @@
-import { useMemo } from 'react';
 import { useAppStore } from '@/stores/useAppStore';
-import { getDemoAssets, writeMidiFile } from '@/midi';
+import { writeMidiFile } from '@/midi';
 import type { Performance } from '@/music-model';
 import { ErrorBanner } from '@/components/common/ErrorBanner';
 import { FileDropZone } from '@/components/common/FileDropZone';
@@ -44,14 +43,11 @@ export function SongLibrary({ onReturnToScore, canReturnToScore = false, busy = 
   const savedSongs = useAppStore((s) => s.savedSongs);
   const currentSongId = useAppStore((s) => s.song?.id);
   const loadSavedSong = useAppStore((s) => s.loadSavedSong);
-  const loadDemo = useAppStore((s) => s.loadDemo);
   const setMode = useAppStore((s) => s.setMode);
   const deleteSong = useAppStore((s) => s.deleteSong);
   const importMidiFile = useAppStore((s) => s.importMidiFile);
-  const isLoadingSong = useAppStore((s) => s.isLoadingSong);
   const importError = useAppStore((s) => s.importError);
 
-  const demos = useMemo(() => getDemoAssets().map(({ id, name }) => ({ id, name })), []);
   const empty = savedSongs.length === 0;
 
   async function practice(id: string): Promise<void> {
@@ -110,22 +106,6 @@ export function SongLibrary({ onReturnToScore, canReturnToScore = false, busy = 
             label="Import MIDI"
             hint="Drop a .mid / .midi file, or click to browse"
           />
-          <div className="library-empty__demos">
-            <span>Or start with a built-in demo:</span>
-            <div className="btn-row">
-              {demos.map((demo) => (
-                <button
-                  key={demo.id}
-                  type="button"
-                  className="btn btn--sm"
-                  disabled={isLoadingSong}
-                  onClick={() => void loadDemo(demo.id)}
-                >
-                  {demo.name}
-                </button>
-              ))}
-            </div>
-          </div>
         </div>
       ) : (
         <div className="song-list" role="list">

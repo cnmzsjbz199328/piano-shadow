@@ -205,6 +205,28 @@ select {
   height: 100%;
 }
 
+.app-nav__header-settings-slot {
+  min-width: 0;
+}
+
+/* The Practice route docks `HeaderSettings` (portaled from `PracticePage`
+   into this slot) inside the nav bar itself, at every width, instead of a
+   separate row below it. The nav grows to fit it — `.header-settings`'s own
+   min-height per breakpoint decides the bar's height, not `--nav-h`. Two
+   classes for specificity: this must win over every width-specific `.app-nav`
+   rule below regardless of source order. */
+.app-nav.app-nav--practice {
+  grid-template-columns: auto minmax(0, 1fr);
+  height: auto;
+  padding-top: 0;
+  padding-bottom: 0;
+  /* `.header-settings` wraps into two internal rows on phone (its own nav
+     row, then the content row); centering the short brand icon against that
+     whole taller box left it looking anchored to the content row instead of
+     the nav row. Align it to the top edge, level with the category nav. */
+  align-items: start;
+}
+
 /* --- shared Practice header settings --- */
 
 .header-settings {
@@ -881,8 +903,6 @@ select {
   font-size: var(--text-sm);
 }
 .library-empty p { margin: 0; }
-.library-empty__demos { display: flex; flex-direction: column; gap: var(--space-2); }
-.library-empty__demos > span { color: var(--text-faint); font-size: var(--text-xs); }
 .song-list { display: flex; flex-direction: column; gap: 0.45rem; }
 .song-row {
   display: flex;
@@ -985,9 +1005,13 @@ select {
 }
 
 /* Score / Library surface switch — reuses the segmented `.mode-tabs` look so it
-   reads as a peer of the practice-mode control, not a new visual language. */
+   reads as a peer of the practice-mode control, not a new visual language.
+   Pinned to the row's right edge unconditionally: without `margin-left: auto`
+   its position depended on whether `.practice-header__seek` (a flex-grow
+   item) was in the DOM, so loading/clearing a song shifted it left/right. */
 .surface-switch {
   flex-shrink: 0;
+  margin-left: auto;
 }
 
 /* segmented mode control */
@@ -1850,14 +1874,32 @@ select {
   .app-nav__settings:empty { display: none; }
   .app-nav__brand { min-width: 2rem; }
   .app-nav__settings { grid-column: 1 / -1; grid-row: 2; height: 0; }
-  .app-nav--practice { grid-template-columns: auto minmax(0, 1fr); grid-template-rows: 1fr; padding-top: 0; padding-bottom: 0; }
-  .app-nav--practice .app-nav__settings { grid-column: 2; grid-row: 1; height: 100%; }
-  .app-nav--practice .app-nav__actions { display: none; }
 
-  .header-settings { gap: var(--space-2); }
   .header-settings__category { padding: 0 0.6rem; }
+
+  /* The nav's category row and the shared content row don't both fit next to
+     the brand icon below desktop width (the 5 category buttons alone need
+     ~250-300px) — wrap them onto their own rows instead of squeezing both
+     into one, which was clipping the Library button off the right edge. */
+  .header-settings {
+    align-items: stretch;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    min-height: 116px;
+  }
+
+  .header-settings__nav {
+    flex: 1 1 100%;
+    min-height: 44px;
+  }
+
   .header-settings__default,
-  .header-settings__content { padding-left: var(--space-2); }
+  .header-settings__content {
+    flex: 1 1 100%;
+    min-height: 64px;
+    padding-left: 0;
+    border-left: 0;
+  }
 
   /* Tablet: trim the frame and let the header toolbar wrap (§7). */
   :root {
@@ -1894,25 +1936,6 @@ select {
     order: 2;
   }
 
-  .header-settings {
-    align-items: stretch;
-    flex-wrap: wrap;
-    min-height: 116px;
-  }
-
-  .header-settings__nav {
-    flex: 1 1 100%;
-    min-height: 44px;
-  }
-
-  .header-settings__default,
-  .header-settings__content {
-    flex: 1 1 100%;
-    min-height: 64px;
-    padding-left: 0;
-    border-left: 0;
-  }
-
   .song-row { align-items: flex-start; flex-direction: column; }
   .song-row__actions { justify-content: flex-start; }
   .song-row__actions { width: 100%; }
@@ -1929,7 +1952,6 @@ select {
 
   .surface-switch {
     order: 5;
-    margin-left: auto;
   }
 }
 

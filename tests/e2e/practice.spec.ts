@@ -20,7 +20,7 @@ test.describe('Piano Shadow — focused practice workspace', () => {
     const main = page.locator('.app-main');
     const navBefore = await nav.boundingBox();
     const mainBefore = await main.boundingBox();
-    expect(Math.round(navBefore?.height ?? 0)).toBe(56);
+    await expect(page.locator('.app-nav .header-settings')).toHaveCount(1);
     await page.screenshot({ path: 'doc/ui-references/header-settings/header-default-desktop.png', fullPage: true });
     expect(page.locator('.practice-header')).toHaveCount(1);
     expect(page.getByRole('region', { name: 'Practice controls' })).toBeVisible();
@@ -41,7 +41,7 @@ test.describe('Piano Shadow — focused practice workspace', () => {
     await page.getByRole('button', { name: 'More' }).click();
 
     await page.setViewportSize({ width: 320, height: 568 });
-    await expect.poll(async () => Math.round((await nav.boundingBox())?.height ?? 0)).toBe(64);
+    await expect(page.locator('.app-nav .header-settings')).toHaveCount(1);
     await page.screenshot({ path: 'doc/ui-references/header-settings/header-default-phone.png', fullPage: true });
     await page.getByRole('button', { name: 'Tempo' }).click();
     await expect(page.getByRole('button', { name: 'Tempo', exact: true })).toBeVisible();
@@ -66,8 +66,7 @@ test.describe('Piano Shadow — focused practice workspace', () => {
     for (const [width, height] of viewports) {
       await page.setViewportSize({ width, height });
       await page.goto('/');
-      const expectedHeight = width < 700 ? 64 : width < 1100 ? 60 : 56;
-      await expect.poll(async () => Math.round((await page.locator('.app-nav').boundingBox())?.height ?? 0)).toBe(expectedHeight);
+      await expect(page.locator('.app-nav .header-settings')).toHaveCount(1);
       expect(await page.locator('body').evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 
       for (const category of categories) {

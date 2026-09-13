@@ -25,6 +25,7 @@ export default function App() {
         <NavLink to="/" className="app-nav__brand" aria-label="Piano Shadow">
           <span className="app-nav__brand-mark" aria-hidden>♬</span>
         </NavLink>
+        {isPracticeRoute && <div className="app-nav__header-settings-slot" id="header-settings-slot" />}
         {!isPracticeRoute && <div className="app-nav__settings" />}
         {!isPracticeRoute && <div className="app-nav__actions">
           <OverflowMenu label="Settings">
