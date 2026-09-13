@@ -6,17 +6,25 @@ The scattered Practice settings entries (the collapsible "Practice settings"
 details under the transport, its nested "Input & feedback details", and the
 top-right gear menu on the Practice route) are replaced by one header settings
 bar (`src/components/settings/HeaderSettings.tsx`) with five categories — Mode,
-Hands, Tempo, Input, More — mounted next to the brand mark. At most one
-category is open at a time, sharing one fixed-height row so opening, switching,
-or closing a category never shifts the song, score, or keyboard below it. On
-screens under 1100px the content takes over the category-label row (with a
-Back button and Escape returning to it); under 700px, Tempo and More paginate
-into single-setting steps with a visible pager. All existing business rules
-(mode/hands disabled while an attempt or recognition is running, tempo step
-and bounds, MIDI connect/select) are unchanged — only where the controls live
-moved. Live practice feedback moves out of the old nested settings and into
-its own fixed-height slot in the main practice content area, so it no longer
-depends on a details element being expanded to be visible.
+Hands, Tempo, Input, More — that sits above the Practice content, moved out of
+the global app nav. The bar's shared content area shows one thing at a time:
+by default the practice transport (song, seek, time, Play/Pause, tempo,
+Score/Library — the former `.practice-header`, now mounted as `HeaderSettings`'s
+`defaultContent`), or, once a category is opened, that category's settings.
+The category nav stays visible and one fixed-height row is shared either way,
+so opening, switching, or closing a category never shifts the song, score, or
+keyboard below it. There is no Back button: clicking the open category again
+or pressing Escape returns to the transport immediately, and after
+`SETTINGS_IDLE_TIMEOUT_MS` (10s) of no interaction the panel auto-restores the
+transport on its own — paused instead while a pointer is down inside the
+panel, focus sits inside it, an IME composition is in progress, or the tab is
+hidden. Under 700px, Tempo and More still paginate into single-setting steps
+with a visible pager. All existing business rules (mode/hands disabled while
+an attempt or recognition is running, tempo step and bounds, MIDI
+connect/select) are unchanged — only where the controls live moved. Live
+practice feedback moves out of the old nested settings and into its own
+fixed-height slot in the main practice content area, so it no longer depends
+on a details element being expanded to be visible.
 
 The Practice page now follows the intended subtractive direction: the microphone
 recognition experiment panel is removed from the main practice flow. `Practice`

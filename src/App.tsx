@@ -3,7 +3,6 @@ import { NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'reac
 import { useAppStore } from '@/stores/useAppStore';
 import { DebugPanel } from '@/components/debug/DebugPanel';
 import { OverflowMenu } from '@/components/common/OverflowMenu';
-import { HeaderSettings } from '@/components/settings/HeaderSettings';
 import { PracticePage } from '@/pages/PracticePage';
 import { ResultsPage } from '@/pages/ResultsPage';
 import { ExperimentsPage } from '@/pages/ExperimentsPage';
@@ -26,7 +25,7 @@ export default function App() {
         <NavLink to="/" className="app-nav__brand" aria-label="Piano Shadow">
           <span className="app-nav__brand-mark" aria-hidden>♬</span>
         </NavLink>
-        <div className="app-nav__settings">{isPracticeRoute && <HeaderSettings />}</div>
+        {!isPracticeRoute && <div className="app-nav__settings" />}
         {!isPracticeRoute && <div className="app-nav__actions">
           <OverflowMenu label="Settings">
             <div className="overflow-menu__heading">Settings</div>

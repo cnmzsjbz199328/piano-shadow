@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState, type CompositionEvent, type FocusEvent, type PointerEvent, type ReactNode, type SyntheticEvent } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { MIN_TEMPO_SCALE, MAX_TEMPO_SCALE } from '@/playback-engine';
 import { useAppStore, type PracticeMode, type PracticeVoice } from '@/stores/useAppStore';
@@ -27,6 +27,12 @@ const VOICES: Array<{ id: PracticeVoice; label: string }> = [
 ];
 
 const TEMPO_STEP = 0.1;
+export const SETTINGS_IDLE_TIMEOUT_MS = 10_000;
+
+interface HeaderSettingsProps {
+  /** The normal Practice controls shown while no category is selected. */
+  defaultContent?: ReactNode;
+}
 
 function useMediaQuery(query: string): boolean {
   const [matches, setMatches] = useState(() => (
@@ -53,16 +59,21 @@ function pageCount(category: SettingsCategory, phone: boolean): number {
   return 1;
 }
 
-export function HeaderSettings() {
+export function HeaderSettings({ defaultContent = null }: HeaderSettingsProps) {
   const location = useLocation();
   const navigate = useNavigate();
-  const compact = useMediaQuery('(max-width: 1099px)');
   const phone = useMediaQuery('(max-width: 699px)');
   const [openCategory, setOpenCategory] = useState<SettingsCategory | null>(null);
   const [pages, setPages] = useState<Partial<Record<SettingsCategory, number>>>({});
   const panelId = `header-settings-panel-${useId().replace(/:/g, '')}`;
-  const backRef = useRef<HTMLButtonElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
   const triggerRefs = useRef<Partial<Record<SettingsCategory, HTMLButtonElement | null>>>({});
+  const idleTimerRef = useRef<number | null>(null);
+  const protectedRef = useRef(false);
+  const pointerDownRef = useRef(false);
+  const openCategoryRef = useRef<SettingsCategory | null>(null);
+  openCategoryRef.current = openCategory;
 
   const song = useAppStore((s) => s.song);
   const mode = useAppStore((s) => s.mode);
@@ -86,16 +97,63 @@ export function HeaderSettings() {
   const handsDisabled = settingsDisabled || isAttemptRunning;
   const tempoDisabled = settingsDisabled;
 
-  useEffect(() => {
+  const clearIdleTimer = useCallback((): void => {
+    if (idleTimerRef.current !== null) {
+      window.clearTimeout(idleTimerRef.current);
+      idleTimerRef.current = null;
+    }
+  }, []);
+
+  const scheduleIdleReset = useCallback((): void => {
+    clearIdleTimer();
+    if (!openCategoryRef.current || protectedRef.current) return;
+    idleTimerRef.current = window.setTimeout(() => {
+      idleTimerRef.current = null;
+      const category = openCategoryRef.current;
+      if (!category) return;
+
+      const focusedPanelElement = contentRef.current?.contains(document.activeElement);
+      openCategoryRef.current = null;
+      protectedRef.current = false;
+      setOpenCategory(null);
+      setPages({});
+      if (focusedPanelElement) {
+        requestAnimationFrame(() => triggerRefs.current[category]?.focus({ preventScroll: true }));
+      }
+    }, SETTINGS_IDLE_TIMEOUT_MS);
+  }, [clearIdleTimer]);
+
+  const hideCategory = useCallback((restoreFocus: boolean): void => {
+    const category = openCategoryRef.current;
+    clearIdleTimer();
+    protectedRef.current = false;
+    openCategoryRef.current = null;
     setOpenCategory(null);
     setPages({});
-  }, [location.pathname]);
+    if (restoreFocus && category) {
+      requestAnimationFrame(() => triggerRefs.current[category]?.focus({ preventScroll: true }));
+    }
+  }, [clearIdleTimer]);
+
+  const noteSettingsActivity = useCallback((): void => {
+    if (!openCategoryRef.current) return;
+    scheduleIdleReset();
+  }, [scheduleIdleReset]);
 
   useEffect(() => {
-    if (!openCategory || !compact) return undefined;
-    const frame = requestAnimationFrame(() => backRef.current?.focus({ preventScroll: true }));
-    return () => cancelAnimationFrame(frame);
-  }, [compact, openCategory]);
+    hideCategory(false);
+  }, [hideCategory, location.pathname]);
+
+  useEffect(() => {
+    if (!openCategory) {
+      clearIdleTimer();
+      return undefined;
+    }
+    scheduleIdleReset();
+    return clearIdleTimer;
+  }, [clearIdleTimer, openCategory, scheduleIdleReset]);
+
+  useEffect(() => () => clearIdleTimer(), [clearIdleTimer]);
 
   useEffect(() => {
     if (openCategory && !phone && (pages[openCategory] ?? 0) !== 0) {
@@ -105,24 +163,102 @@ export function HeaderSettings() {
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key !== 'Escape' || !openCategory) return;
-      event.preventDefault();
-      const trigger = triggerRefs.current[openCategory];
-      setOpenCategory(null);
-      setPages({});
-      requestAnimationFrame(() => trigger?.focus({ preventScroll: true }));
+      if (!openCategoryRef.current) return;
+      if (event.key === 'Escape' && rootRef.current?.contains(event.target as Node)) {
+        event.preventDefault();
+        hideCategory(true);
+      }
     }
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [openCategory]);
+  }, [hideCategory]);
+
+  useEffect(() => {
+    if (!openCategory) return undefined;
+    const releasePointer = () => {
+      pointerDownRef.current = false;
+      protectedRef.current = false;
+      scheduleIdleReset();
+    };
+    window.addEventListener('pointerup', releasePointer);
+    window.addEventListener('pointercancel', releasePointer);
+    return () => {
+      window.removeEventListener('pointerup', releasePointer);
+      window.removeEventListener('pointercancel', releasePointer);
+    };
+  }, [openCategory, scheduleIdleReset]);
+
+  useEffect(() => {
+    if (!openCategory) return undefined;
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        clearIdleTimer();
+        return;
+      }
+      if (!(document.activeElement instanceof Node && contentRef.current?.contains(document.activeElement))) {
+        protectedRef.current = false;
+      }
+      scheduleIdleReset();
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [clearIdleTimer, openCategory, scheduleIdleReset]);
+
+  function handlePointerDown(event: PointerEvent<HTMLDivElement>): void {
+    pointerDownRef.current = true;
+    if (event.target instanceof Node && contentRef.current?.contains(event.target)) {
+      protectedRef.current = true;
+      clearIdleTimer();
+    }
+  }
+
+  function handlePointerUp(): void {
+    pointerDownRef.current = false;
+    protectedRef.current = false;
+    scheduleIdleReset();
+  }
+
+  function handleFocusIn(event: FocusEvent<HTMLDivElement>): void {
+    if (event.target instanceof Node && contentRef.current?.contains(event.target) && !pointerDownRef.current) {
+      protectedRef.current = true;
+      clearIdleTimer();
+    }
+  }
+
+  function handleFocusOut(event: FocusEvent<HTMLDivElement>): void {
+    const next = event.relatedTarget;
+    if (!(next instanceof Node) || !contentRef.current?.contains(next)) {
+      protectedRef.current = false;
+      scheduleIdleReset();
+    }
+  }
+
+  function handlePanelActivity(event: SyntheticEvent<HTMLDivElement>): void {
+    if (event.target instanceof Node && contentRef.current?.contains(event.target)) noteSettingsActivity();
+  }
+
+  function handleCompositionStart(event: CompositionEvent<HTMLDivElement>): void {
+    if (event.target instanceof Node && contentRef.current?.contains(event.target)) {
+      protectedRef.current = true;
+      clearIdleTimer();
+    }
+  }
+
+  function handleCompositionEnd(event: CompositionEvent<HTMLDivElement>): void {
+    if (event.target instanceof Node && contentRef.current?.contains(event.target)) {
+      protectedRef.current = false;
+      scheduleIdleReset();
+    }
+  }
 
   function toggleCategory(category: SettingsCategory): void {
     if (openCategory === category) {
-      setOpenCategory(null);
-      setPages({});
-      requestAnimationFrame(() => triggerRefs.current[category]?.focus({ preventScroll: true }));
+      hideCategory(true);
       return;
     }
+    clearIdleTimer();
+    protectedRef.current = false;
+    openCategoryRef.current = category;
     setOpenCategory(category);
     setPages({ [category]: 0 });
   }
@@ -130,6 +266,7 @@ export function HeaderSettings() {
   function setPage(next: number): void {
     if (!openCategory) return;
     setPages((current) => ({ ...current, [openCategory]: next }));
+    noteSettingsActivity();
   }
 
   function renderMode(): JSX.Element {
@@ -209,7 +346,7 @@ export function HeaderSettings() {
     const actions = [
       <button key="advanced" type="button" className="header-settings__option" onClick={() => navigate('/experiments')}>Advanced</button>,
       <button key="diagnostics" type="button" className="header-settings__option" onClick={() => navigate('/lab')}>Diagnostics</button>,
-      <button key="debug" type="button" className="header-settings__option" aria-pressed={showDebugPanel} onClick={() => setShowDebugPanel(!showDebugPanel)}>Debug {showDebugPanel ? 'On' : 'Off'}</button>,
+      <button key="debug" type="button" className="header-settings__option" aria-pressed={showDebugPanel} onClick={() => setShowDebugPanel(!showDebugPanel)}>Debug mode: {showDebugPanel ? 'On' : 'Off'}</button>,
     ];
     return <div className="header-settings__page">{phone ? actions[currentPage] : actions}</div>;
   }
@@ -226,7 +363,21 @@ export function HeaderSettings() {
   const totalPages = openCategory ? pageCount(openCategory, phone) : 1;
 
   return (
-    <div className={`header-settings${openCategory ? ' header-settings--open' : ''}`} data-open={openCategory ? 'true' : undefined}>
+    <div
+      ref={rootRef}
+      className={`header-settings${openCategory ? ' header-settings--open' : ''}`}
+      data-open={openCategory ? 'true' : undefined}
+      onPointerDownCapture={handlePointerDown}
+      onPointerUpCapture={handlePointerUp}
+      onFocusCapture={handleFocusIn}
+      onBlurCapture={handleFocusOut}
+      onClick={handlePanelActivity}
+      onInput={handlePanelActivity}
+      onChange={handlePanelActivity}
+      onKeyDown={handlePanelActivity}
+      onCompositionStart={handleCompositionStart}
+      onCompositionEnd={handleCompositionEnd}
+    >
       <div className="header-settings__nav" role="group" aria-label="Practice settings">
         {CATEGORIES.map((category) => (
           <button
@@ -244,10 +395,7 @@ export function HeaderSettings() {
       </div>
 
       {openCategory && (
-        <div className="header-settings__content" id={panelId} role="region" aria-label={`${activeLabel} settings`}>
-          <button ref={backRef} type="button" className="header-settings__back" onClick={() => toggleCategory(openCategory)}>
-            <span aria-hidden>←</span><span>Back</span>
-          </button>
+        <div ref={contentRef} className="header-settings__content" id={panelId} role="region" aria-label={`${activeLabel} settings`}>
           <strong className="header-settings__title">{activeLabel}</strong>
           <div className="header-settings__body">
             <div key={`${openCategory}-${currentPage}`} className="header-settings__page-transition">
@@ -263,6 +411,7 @@ export function HeaderSettings() {
           )}
         </div>
       )}
+      {!openCategory && <div className="header-settings__default" role="region" aria-label="Practice controls">{defaultContent}</div>}
     </div>
   );
 }

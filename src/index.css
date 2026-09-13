@@ -210,9 +210,11 @@ select {
 .header-settings {
   display: flex;
   align-items: center;
+  gap: var(--space-3);
   width: 100%;
-  height: 100%;
+  min-height: 72px;
   min-width: 0;
+  padding: var(--space-2) 0;
   color: var(--text-dim);
 }
 
@@ -220,7 +222,7 @@ select {
   display: flex;
   align-items: center;
   min-width: 0;
-  height: 100%;
+  min-height: 44px;
   overflow-x: auto;
   scrollbar-width: none;
 }
@@ -251,19 +253,18 @@ select {
   box-shadow: inset 0 -2px 0 var(--accent);
 }
 
+.header-settings__default,
 .header-settings__content {
   display: flex;
   align-items: center;
   flex: 1 1 auto;
   min-width: 0;
-  height: 100%;
-  margin-left: var(--space-2);
+  min-height: 64px;
   padding-left: var(--space-3);
   border-left: 1px solid var(--border-subtle);
   overflow: hidden;
 }
 
-.header-settings__back,
 .header-settings__pager-button {
   flex: 0 0 auto;
   height: 36px;
@@ -278,8 +279,6 @@ select {
   white-space: nowrap;
 }
 
-.header-settings__back { display: none; gap: 0.25rem; align-items: center; }
-.header-settings__back:hover,
 .header-settings__pager-button:hover:not(:disabled) { background: var(--bg-elevated-2); color: var(--text); }
 .header-settings__pager-button:disabled { opacity: 0.35; cursor: not-allowed; }
 
@@ -297,7 +296,7 @@ select {
   align-items: center;
   flex: 1 1 auto;
   min-width: 0;
-  height: 100%;
+  min-height: 44px;
   overflow: hidden;
 }
 
@@ -305,7 +304,6 @@ select {
   display: flex;
   align-items: center;
   width: 100%;
-  height: 100%;
   min-width: 0;
   animation: header-settings-flip 180ms ease-out both;
 }
@@ -365,6 +363,11 @@ select {
 .midi-device--compact .midi-device__select { flex: 1 1 9rem; min-width: 4rem; max-width: 15rem; }
 .header-settings__status { overflow: hidden; color: var(--text-dim); font-size: var(--text-xs); text-overflow: ellipsis; white-space: nowrap; }
 .midi-device--compact > p { display: none; }
+
+.header-settings__default > .song-transport {
+  width: 100%;
+  min-width: 0;
+}
 
 .app-main {
   flex: 1;
@@ -1836,10 +1839,6 @@ select {
 /* --- responsive --- */
 
 @media (max-width: 1099px) {
-  .practice-header {
-    gap: var(--space-2);
-  }
-
   .app-nav {
     grid-template-columns: 1fr auto;
     height: 60px;
@@ -1855,11 +1854,10 @@ select {
   .app-nav--practice .app-nav__settings { grid-column: 2; grid-row: 1; height: 100%; }
   .app-nav--practice .app-nav__actions { display: none; }
 
-  .header-settings__nav { width: 100%; }
+  .header-settings { gap: var(--space-2); }
   .header-settings__category { padding: 0 0.6rem; }
-  .header-settings[data-open='true'] .header-settings__nav { display: none; }
-  .header-settings__content { margin-left: 0; padding-left: var(--space-2); border-left: 0; }
-  .header-settings__back { display: inline-flex; }
+  .header-settings__default,
+  .header-settings__content { padding-left: var(--space-2); }
 
   /* Tablet: trim the frame and let the header toolbar wrap (§7). */
   :root {
@@ -1871,13 +1869,6 @@ select {
     padding: var(--space-3) var(--space-3) 0;
   }
 
-  .practice-header__title {
-    max-width: none;
-  }
-
-  .practice-header__id {
-    flex-basis: 15rem;
-  }
 }
 
 @media (max-width: 640px) {
@@ -1903,6 +1894,25 @@ select {
     order: 2;
   }
 
+  .header-settings {
+    align-items: stretch;
+    flex-wrap: wrap;
+    min-height: 116px;
+  }
+
+  .header-settings__nav {
+    flex: 1 1 100%;
+    min-height: 44px;
+  }
+
+  .header-settings__default,
+  .header-settings__content {
+    flex: 1 1 100%;
+    min-height: 64px;
+    padding-left: 0;
+    border-left: 0;
+  }
+
   .song-row { align-items: flex-start; flex-direction: column; }
   .song-row__actions { justify-content: flex-start; }
   .song-row__actions { width: 100%; }
@@ -1913,13 +1923,13 @@ select {
     --workspace-h: clamp(260px, 58vh, 420px);
   }
 
+  .surface-switch button {
+    padding-inline: 0.6rem;
+  }
+
   .surface-switch {
     order: 5;
     margin-left: auto;
-  }
-
-  .surface-switch button {
-    padding-inline: 0.6rem;
   }
 }
 
@@ -1933,9 +1943,7 @@ select {
   }
 
   .app-nav__brand { padding: 0 0.35rem; }
-  .header-settings__content { gap: 0.25rem; padding-left: 0.2rem; }
-  .header-settings__back { width: 36px; min-width: 36px; padding: 0; font-size: 0; }
-  .header-settings__back span:first-child { font-size: var(--text-base); }
+  .header-settings__content { gap: 0.25rem; }
   .header-settings__title { margin-right: 0.25rem; }
   .header-settings__body { overflow: hidden; }
   .header-settings__page { gap: 0.25rem; }

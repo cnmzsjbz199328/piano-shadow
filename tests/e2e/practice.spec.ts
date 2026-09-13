@@ -21,6 +21,9 @@ test.describe('Piano Shadow — focused practice workspace', () => {
     const navBefore = await nav.boundingBox();
     const mainBefore = await main.boundingBox();
     expect(Math.round(navBefore?.height ?? 0)).toBe(56);
+    await page.screenshot({ path: 'doc/ui-references/header-settings/header-default-desktop.png', fullPage: true });
+    expect(page.locator('.practice-header')).toHaveCount(1);
+    expect(page.getByRole('region', { name: 'Practice controls' })).toBeVisible();
 
     await page.getByRole('button', { name: 'Mode' }).click();
     await expect(page.getByRole('region', { name: 'Mode settings' })).toBeVisible();
@@ -28,6 +31,7 @@ test.describe('Piano Shadow — focused practice workspace', () => {
     const mainAfterOpen = await main.boundingBox();
     expect(navAfterOpen).toEqual(navBefore);
     expect(mainAfterOpen).toEqual(mainBefore);
+    expect(page.locator('.practice-header')).toHaveCount(0);
     expect(page.locator('.practice-settings')).toHaveCount(0);
     await page.screenshot({ path: 'doc/ui-references/header-settings/header-settings-desktop.png', fullPage: true });
 
@@ -38,10 +42,11 @@ test.describe('Piano Shadow — focused practice workspace', () => {
 
     await page.setViewportSize({ width: 320, height: 568 });
     await expect.poll(async () => Math.round((await nav.boundingBox())?.height ?? 0)).toBe(64);
+    await page.screenshot({ path: 'doc/ui-references/header-settings/header-default-phone.png', fullPage: true });
     await page.getByRole('button', { name: 'Tempo' }).click();
-    await expect(page.getByRole('button', { name: 'Back' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Tempo', exact: true })).toBeVisible();
     await expect(page.getByText('1/3')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Mode' })).toBeHidden();
+    await expect(page.getByRole('button', { name: 'Mode' })).toBeVisible();
     await page.getByRole('button', { name: 'Next page' }).click();
     await expect(page.getByText('2/3')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Count-in On' })).toBeDisabled();
@@ -69,11 +74,7 @@ test.describe('Piano Shadow — focused practice workspace', () => {
         await page.getByRole('button', { name: category, exact: true }).click();
         await expect(page.getByRole('region', { name: `${category} settings` })).toBeVisible();
         expect(await page.locator('body').evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-        if (width < 1100) {
-          await page.getByRole('button', { name: 'Back' }).click();
-        } else {
-          await page.getByRole('button', { name: category, exact: true }).click();
-        }
+        await page.getByRole('button', { name: category, exact: true }).click();
         await expect(page.getByRole('button', { name: category, exact: true })).toBeVisible();
       }
     }
@@ -86,7 +87,7 @@ test.describe('Piano Shadow — focused practice workspace', () => {
     await page.evaluate(() => { document.documentElement.style.zoom = '2'; });
 
     await page.getByRole('button', { name: 'Tempo' }).click();
-    await expect(page.getByRole('button', { name: 'Back' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Tempo', exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Next page' })).toBeVisible();
     await page.getByRole('button', { name: 'Next page' }).click();
     await expect(page.getByRole('button', { name: /Count-in On/i })).toBeDisabled();

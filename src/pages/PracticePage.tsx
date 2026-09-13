@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { useAppStore, type PracticeSurface } from '@/stores/useAppStore';
 import { currentOnsetGroup, nextOnsetGroup, voiceFilteredNotes } from '@/practice-engine';
 import { TransportControls } from '@/components/transport/TransportControls';
+import { HeaderSettings } from '@/components/settings/HeaderSettings';
 import { PianoKeyboard } from '@/components/piano/PianoKeyboard';
 import { ScoreSurface } from '@/components/sheet-music/ScoreSurface';
 import { PracticeWorkspace } from '@/components/practice/PracticeWorkspace';
@@ -84,10 +85,14 @@ export function PracticePage() {
 
   return (
     <div className="practice-page">
-      <TransportControls
-        surface={practiceSurface}
-        onSurfaceChange={requestSurface}
-        surfaceSwitchDisabled={isFlipping}
+      <HeaderSettings
+        defaultContent={(
+          <TransportControls
+            surface={practiceSurface}
+            onSurfaceChange={requestSurface}
+            surfaceSwitchDisabled={isFlipping}
+          />
+        )}
       />
 
       {song && (mode === 'play-along' || mode === 'wait') && liveFeedback.length > 0 && (

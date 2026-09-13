@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { HeaderSettings } from './HeaderSettings';
@@ -24,10 +24,10 @@ function setMatchMedia(phone = false): void {
   });
 }
 
-function renderHeader(): void {
+function renderHeader(withDefaultContent = false): void {
   render(
     <MemoryRouter initialEntries={['/']}>
-      <HeaderSettings />
+      <HeaderSettings defaultContent={withDefaultContent ? <span>Default practice controls</span> : undefined} />
     </MemoryRouter>,
   );
 }
@@ -46,6 +46,7 @@ beforeEach(() => {
 
 afterEach(() => {
   window.matchMedia = originalMatchMedia;
+  vi.useRealTimers();
   vi.restoreAllMocks();
 });
 
@@ -67,6 +68,7 @@ describe('HeaderSettings', () => {
 
     await user.keyboard('{Escape}');
     await waitFor(() => expect(screen.queryByRole('region', { name: 'Hands settings' })).toBeNull());
+    expect(screen.queryByRole('button', { name: 'Back' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Advanced' })).toBeNull();
     expect(hands).toHaveFocus();
   });
@@ -101,5 +103,33 @@ describe('HeaderSettings', () => {
     await user.click(screen.getByRole('button', { name: 'Next page' }));
     expect(screen.getByRole('button', { name: /Metronome Off/i })).toBeDisabled();
     expect(screen.getByText('3/3')).toBeVisible();
+  });
+
+  it('switches back to the default controls after ten seconds of unprotected idle time', () => {
+    vi.useFakeTimers();
+    renderHeader(true);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mode' }));
+    expect(screen.getByRole('region', { name: 'Mode settings' })).toBeVisible();
+    act(() => { vi.advanceTimersByTime(9_999); });
+    expect(screen.getByRole('region', { name: 'Mode settings' })).toBeVisible();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mode' }));
+    expect(screen.getByText('Default practice controls')).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'More' }));
+    act(() => { vi.advanceTimersByTime(10_000); });
+    expect(screen.getByText('Default practice controls')).toBeVisible();
+    expect(screen.queryByRole('region', { name: 'More settings' })).toBeNull();
+  });
+
+  it('pauses the idle timeout while keyboard focus remains in the settings panel', () => {
+    vi.useFakeTimers();
+    renderHeader(true);
+
+    fireEvent.click(screen.getByRole('button', { name: 'More' }));
+    act(() => { screen.getByRole('button', { name: 'Advanced' }).focus(); });
+    expect(screen.getByRole('button', { name: 'Advanced' })).toHaveFocus();
+    act(() => { vi.advanceTimersByTime(10_000); });
+    expect(screen.getByRole('region', { name: 'More settings' })).toBeVisible();
   });
 });
