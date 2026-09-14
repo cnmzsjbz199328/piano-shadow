@@ -16,10 +16,16 @@ feedback on pitch, timing, rhythm, duration, missed notes, and extra notes.
 **Live app:** https://piano-shadow.pages.dev
 
 The core is the **Web Practice MVP** described in
-[`doc/PIANO_SHADOW_GOAL.md`](doc/PIANO_SHADOW_GOAL.md); **v0.3.0** rebuilt the Practice
-page into a continuous workspace with a full 88-key keyboard. See
-[`doc/ARCHITECTURE.md`](doc/ARCHITECTURE.md) for how it's built and
-[`CHANGELOG.md`](CHANGELOG.md) for what shipped in each release.
+[`doc/PIANO_SHADOW_GOAL.md`](doc/PIANO_SHADOW_GOAL.md). The original spec's
+microphone-based "Listen" idea was demoted early: real-piano recognition
+accuracy wasn't there, so **MIDI import + virtual keyboard/Web MIDI input**
+became the core path instead, and microphone recognition kept going as an
+isolated, explicitly-experimental diagnostic surface (see *Secondary
+surfaces* and *Known limitations* below) — this was a deliberate call, not
+an unfinished one. **v0.3.0** rebuilt the Practice page into a continuous
+workspace with a full 88-key keyboard; see *Roadmap* below for what shipped
+after that. See [`doc/ARCHITECTURE.md`](doc/ARCHITECTURE.md) for how it's
+built and [`CHANGELOG.md`](CHANGELOG.md) for the full detail on every release.
 
 ## Implemented features
 
@@ -38,12 +44,18 @@ page into a continuous workspace with a full 88-key keyboard. See
   phone — and an optional Web MIDI device, behind the same input interface.
   An "Input latency compensation" setting shifts recorded onsets to cancel
   device/OS delay before scoring.
-- **Falling-notes guide**: a "Synthesia"-style layer above the keyboard during
-  playback/practice, columns aligned to the keys (honours `prefers-reduced-motion`).
+- **On-keyboard guidance**: the current target note (accent colour) and the
+  next onset group (muted, unfilled) are labelled directly above the keys
+  that play them — no separate falling-notes canvas, so nothing shifts when
+  a song loads (honours `prefers-reduced-motion`).
 - **Practice modes**: Listen (highlight only), Play Along (record + score on
   finish, with live feedback), Wait Mode (pauses at the next note/chord until
   you play it). **Per-hand practice**: restrict playback and scoring to the
   left or right hand (inferred from the MIDI file's tracks or a pitch split).
+- **Settings bar**: one header bar (Mode / Hands / Tempo / Input / More) docked
+  in the nav on the Practice route, above the transport — opens one category
+  at a time in a fixed-height slot (nothing else on the page shifts) and
+  auto-closes after 10s idle.
 - **Practice workspace**: imported staff notation is the primary Score surface;
   the MIDI Library flips into the same workspace, while the independently
   scrollable 88-key keyboard dock stays in place.
@@ -58,6 +70,30 @@ page into a continuous workspace with a full 88-key keyboard. See
   and a full per-note table (expected vs. played vs. timing vs. result).
 - **Local persistence** (IndexedDB): imported songs, every attempt's full score
   breakdown, and your settings. No login, no cloud.
+
+## Secondary surfaces (not on the main Practice path)
+
+The main path is Practice → (Score or Library) → Results. Everything below is
+reachable but deliberately one step removed — via the header settings bar's
+**More** category on Practice, or the nav's **Settings** menu on every other
+page:
+
+- **Advanced** (`/experiments`) — browser capability checks (Web MIDI / Web
+  Audio support, sample rate, base latency) and the manual **input latency
+  compensation** field (−200…500&nbsp;ms) that shifts recorded onsets to
+  cancel device/OS delay before scoring.
+- **Diagnostics** (`/lab`, "Recognition diagnostics" — the Microphone Lab) —
+  mic permission flow, live capture, two pitch recognizers (Pitchy, Basic
+  Pitch), latency measurement, and a MIDI-ground-truth comparison reusing the
+  practice engine's own scoring. Experimental; see *Known limitations* below.
+
+One more surface exists in the code but currently has **no UI entry point at
+all**: `DebugPanel` (`src/components/debug/DebugPanel.tsx`) and its
+`showDebugPanel` store flag/persistence are implemented and unit-tested, but
+the toggle that used to open it (in both the old nav overflow menu and
+`HeaderSettings`' More page) was removed with nothing put in its place — for
+now the only way to see it is `useAppStore.getState().setShowDebugPanel(true)`
+from devtools.
 
 ## Architecture overview
 
@@ -166,6 +202,9 @@ doc/                      product spec, architecture doc, screenshots
 
 ## Known limitations
 
+These are implemented but intentionally incomplete — scoped follow-up work,
+not bugs to fix in passing:
+
 - The metronome and count-in follow the reference file's **first tempo
   marking only** — a mid-piece tempo change is not yet reflected in the click
   grid (the pitch/timing/rhythm scoring itself is unaffected, since that is
@@ -223,6 +262,21 @@ forever), scale-to-fit keyboard, restored E2E regressions;
 guide; **v0.7.0** — per-hand practice + multi-track export + input-latency
 compensation; **v0.8.0** — VexFlow staff-notation view (imported MIDI,
 display-only).
+
+**v0.9.0 — Score / Library flip workspace** (2026-09-10, plan
+[`doc/UI_OPTIMIZATION_PLAN.md`](doc/UI_OPTIMIZATION_PLAN.md)) shipped: the
+Practice page's Score and the MIDI Library flip between two faces of one
+workspace instead of separate views, with the keyboard dock staying put
+across the flip.
+
+**Unreleased — simplify the Practice surface** (see `CHANGELOG.md` for the
+full write-up) shipped: `HeaderSettings` docked directly in the nav bar
+instead of a row below it; the microphone recognition panel removed from the
+main Practice flow (still reachable at Settings → Diagnostics / `/lab`); the
+separate falling-notes canvas replaced by on-keyboard note labels; long
+imported scores render lazily in VexFlow instead of being capped at 64 bars;
+the Debug-panel toggle removed from the UI with no replacement entry point
+(see *Secondary surfaces* above).
 
 **Open — validate microphone recognition on real audio.** Still gated (spec §36,
 `ROUND_3_REQUIREMENTS §D.1`) on a live microphone/real-piano session measuring
