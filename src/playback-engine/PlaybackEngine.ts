@@ -76,6 +76,14 @@ export class PlaybackEngine {
   load(performance: Performance): void {
     this.stop();
     this.currentPerformance = performance;
+    // Kick off the sampled-piano download as soon as a song is chosen, not when
+    // Play is first pressed. `prepare()` is idempotent and the fetch is async,
+    // so this just buys the streamed samples the time between "pick a song" and
+    // "press Play" to land — without it, playback's opening notes (count-in and
+    // the piece's start) render through the thin synth fallback until the
+    // in-flight download resolves, which is what made the very start of a fresh
+    // session sound duller/muddier than the rest of the piece.
+    instrument.prepare();
   }
 
   getPerformance(): Performance | null {
@@ -413,6 +421,14 @@ export class PlaybackEngine {
 
     for (const beat of grid) {
       if (beat.time >= 0 && !this.metronomeEnabled) continue; // only the lead-in clicks are unconditional
+      // beat.time===0 is the piece's own downbeat — the reference performance's
+      // first note (virtually always onset at t=0) already sounds there. Firing
+      // a click on top of it stacked a bright square-wave tone directly onto the
+      // note's attack transient, the "muddy at the start" complaint: every other
+      // beat only *might* coincide with a note (fine — that's normal metronome
+      // behaviour), but this one always does, right when the ear has had zero
+      // warning (no count-in) or just finished a clean run of count-in ticks.
+      if (Math.abs(beat.time) < 1e-9) continue;
       const t = transportFromRef(this.origin, beat.time);
       if (t < nowTransportSec - 1e-6) continue; // already passed
       const accent = beat.beatInBar === 0;

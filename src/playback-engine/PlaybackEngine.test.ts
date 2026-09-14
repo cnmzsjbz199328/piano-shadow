@@ -49,6 +49,26 @@ describe('PlaybackEngine — reference voice ownership', () => {
   });
 });
 
+describe('PlaybackEngine — metronome click scheduling', () => {
+  it("does not schedule a click at t=0, avoiding a stacked attack on the piece's first note", async () => {
+    const engine = new PlaybackEngine();
+    engine.load(buildPerformance([
+      { midi: 60, startTime: 0, duration: 0.5 },
+      { midi: 64, startTime: 0.5, duration: 0.5 },
+    ], { name: 'downbeat', source: 'midi-file' }));
+    engine.setCountInEnabled(false);
+    engine.setMetronomeEnabled(true);
+
+    await engine.play();
+
+    const scheduledTimes = (mocks.transport.scheduleOnce.mock.calls as unknown as Array<[unknown, number]>).map((c) => c[1]);
+    const atZero = scheduledTimes.filter((t) => Math.abs(t) < 1e-9);
+    // Exactly one thing may legitimately land at t=0: the reference note itself
+    // (the schedule-end callback lands at the piece's duration, not 0).
+    expect(atZero.length).toBe(1);
+  });
+});
+
 describe('PlaybackEngine — note click loop', () => {
   it('starts a valid range at A and uses one repeating boundary schedule', () => {
     const engine = new PlaybackEngine();
