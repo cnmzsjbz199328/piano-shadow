@@ -73,7 +73,7 @@ export function SongLibrary({ onReturnToScore, canReturnToScore = false, busy = 
       <div className="workspace-surface__header">
         <div>
           <span className="section-heading__eyebrow">Library</span>
-          <h2 id="song-library-title" data-workspace-heading tabIndex={-1}>My MIDI songs</h2>
+          <h2 className="sr-only" id="song-library-title" data-workspace-heading tabIndex={-1}>My MIDI songs</h2>
         </div>
         <div className="song-library__actions">
           <span className="section-heading__count">
