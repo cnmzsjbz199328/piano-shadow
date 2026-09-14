@@ -1176,12 +1176,6 @@ select {
   font-size: var(--text-sm);
 }
 
-.count-in-banner {
-  color: var(--accent);
-  font-weight: 600;
-  font-size: var(--text-sm);
-}
-
 /* piano roll is the dominant element of the workspace body */
 .practice-body {
   min-width: 0;

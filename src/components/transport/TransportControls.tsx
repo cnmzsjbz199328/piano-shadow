@@ -108,7 +108,6 @@ export function TransportControls({ surface, onSurfaceChange, surfaceSwitchDisab
         </div>
       </div>
 
-      {song && transportState === 'counting-in' && <span className="count-in-banner">Count-in...</span>}
       {song && waitingForMidi && <div className="wait-banner" role="status">Play {waitingForMidi.length > 1 ? 'these notes' : 'this note'} to continue...</div>}
     </>
   );
