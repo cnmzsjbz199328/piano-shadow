@@ -20,12 +20,33 @@ row's right edge unconditionally (`margin-left: auto`, not just under
 item was in the DOM, so it visibly jumped left/right between "no song
 loaded" and "song loaded".
 
-The Library's empty state no longer offers built-in demo melodies ("C Major
-Five-Finger", "Rhythm Study", "Twinkle, Twinkle") as a way to start
-practicing without an import — that shortcut is removed by request. The
-underlying demo assets, the store's `loadDemo` action, and the Microphone
-Lab's own "Demo melody" picker are untouched, so spec §22's built-in demo
-requirement still holds via `/lab`.
+The Library's empty state briefly dropped its built-in-demo shortcut, then
+got it back in a different shape: the three programmatically-generated demos
+("C Major Five-Finger", "Rhythm Study", "Twinkle, Twinkle") are replaced by
+one real Standard MIDI File — Beethoven's Für Elise, embedded as base64 bytes
+in `midi/demoAssets.ts` and round-tripped through the same `parseMidiFile`
+importer a user's own upload goes through (spec §22). The empty state offers
+this single demo via the existing `loadDemo` action; the Microphone Lab's own
+"Demo melody" picker is untouched.
+
+The nav's brand link/mark (`.app-nav__brand`) is removed, along with its grid
+column — `.app-nav` and `.app-nav--practice` now run a single content column
+plus the settings/actions column at every width. The Debug-panel toggle is
+removed from both the overflow menu and HeaderSettings' More page, with no
+replacement entry point for now; per the pattern already established for
+Stop/Restart (2b375ce), `showDebugPanel`/`setShowDebugPanel`, its persistence,
+and `DebugPanel` itself are untouched and still unit-tested — just not
+reachable from the UI. `.practice-header` (the former `.song-transport`, now
+a fragment instead of a wrapper element) splits into `__context` (title,
+seek, time) and `__actions` (play/speed, Score/Library switch) with a
+divider between them.
+
+The Note-Click-Loop status banner and its "Clear loop" button are removed
+from `ScoreView` — the score's own start/end/range highlighting already
+shows the loop, and clicking any other note while looping already exits it
+(`loopSelection.ts`), so the redundant status text and button added no
+information. The store drops `loopNotice` since nothing produces
+loop-related copy anymore.
 
 The scattered Practice settings entries (the collapsible "Practice settings"
 details under the transport, its nested "Input & feedback details", and the

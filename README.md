@@ -23,12 +23,12 @@ page into a continuous workspace with a full 88-key keyboard. See
 
 ## Implemented features
 
-- **Import** a Standard MIDI File (`.mid`/`.midi`), or start from one of three
-  built-in demo melodies — no file required to try the app.
+- **Import** a Standard MIDI File (`.mid`/`.midi`), or start from the
+  built-in demo (Beethoven's Für Elise) — no file required to try the app.
 - **Piano Roll**: time/pitch axes, a pitch-aligned keyboard gutter, zoom, a
   synchronized playhead, and a reference-vs-learner result overlay on Results.
-- **Playback**: play/pause/stop/seek/restart, tempo scale (25%–200%),
-  metronome, count-in — all driven from one clock so the playhead can never drift.
+- **Playback**: play/pause/seek, tempo scale (25%–200%), metronome, count-in
+  — all driven from one clock so the playhead can never drift.
 - **Sound**: reference playback and every learner input (on-screen keyboard,
   live Web MIDI, recognised notes) sound through a shared sampled grand piano
   (`smplr`), with a transparent synth fallback if samples can't load and a
@@ -58,8 +58,6 @@ page into a continuous workspace with a full 88-key keyboard. See
   and a full per-note table (expected vs. played vs. timing vs. result).
 - **Local persistence** (IndexedDB): imported songs, every attempt's full score
   breakdown, and your settings. No login, no cloud.
-- **Debug panel** (off by default): playhead, active notes, last MIDI event,
-  matching decisions — for diagnosing timing issues.
 
 ## Architecture overview
 
@@ -150,7 +148,7 @@ in development, HTTPS in production.
 ```
 src/
   music-model/       canonical NoteEvent/Performance types + helpers
-  midi/               Standard MIDI File import, built-in demo melodies
+  midi/               Standard MIDI File import, the built-in demo (Für Elise)
   practice-engine/     sequence alignment, timing/rhythm analysis, scoring
   playback-engine/     Tone.js transport wrapper, the single playback clock
   device-adapters/     virtual keyboard + Web MIDI input, performance recorder

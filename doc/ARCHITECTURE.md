@@ -58,7 +58,7 @@ input, same output, always (spec §21.1).
 | Module | Responsibility | Depends on |
 |---|---|---|
 | `music-model` | Canonical types, note-name conversion, normalization, `inferHands` (pure left/right hand assignment) | nothing else in `src` |
-| `midi` | Standard MIDI File import (`@tonejs/midi`) → `Performance`, tagging every note with an inferred `hand`; `writeMidiFile` (`Performance` → SMF, one track per `hand`/`track` group) for library Export; built-in demo melodies | `music-model` |
+| `midi` | Standard MIDI File import (`@tonejs/midi`) → `Performance`, tagging every note with an inferred `hand`; `writeMidiFile` (`Performance` → SMF, one track per `hand`/`track` group) for library Export; the built-in demo (Für Elise, embedded as bytes and parsed through the same importer as a user upload) | `music-model` |
 | `quantization` | Non-destructive grid-snap for a future Teach Mode capture pipeline | `music-model` |
 | `practice-engine` | `SequenceAligner` (DP alignment), `timingAnalyzer` (tempo/rhythm split), `scoring`, `evaluatePerformance`, `LiveMatcher` | `music-model` only |
 | `playback-engine` | `PlaybackEngine` (Tone.js transport wrapper: play/pause/seek/tempo/metronome/count-in), `timeMapping` (pure clock math), `Metronome` (pure beat-grid math) | `music-model`, `audio-engine` |
@@ -157,6 +157,20 @@ paths, gated by an in-memory `soundEnabled` flag. Scores are never stored as
 mutable state directly written by the UI; every `EvaluationResult` in the store
 came from a call to `evaluatePerformance` (spec §25).
 
+### UI controls removed without a replacement
+
+Several `useAppStore` actions have no caller in `components`/`pages` right
+now: `stop`, `restart` (removed 2b375ce), `setShowDebugPanel` (paired with
+the still-defined but unmounted `components/debug/DebugPanel`), and
+`clearLoop` (its "Clear loop" button removed alongside the Note Click Loop
+status banner — see below). Each removal was a deliberate, direction-driven
+subtraction of the *UI entry point only* — the store method, its unit tests,
+and (for the debug panel) its persisted setting are left in place on
+purpose, in case a future round re-exposes the capability through different
+UI. Don't treat an unreachable action as dead code to delete, and don't
+reflexively re-add a button for it — both are product decisions, not
+cleanup.
+
 ## Rendering
 
 The Piano Roll (`components/piano-roll/PianoRoll.tsx`) is Canvas 2D: a redraw on
@@ -242,3 +256,10 @@ interaction state measured with an absolute monotonic deadline; it is not a
 second music clock. Formal scored attempts clear an active loop before they
 start, so repeated reference time is never silently written into a practice
 attempt.
+
+There is no status banner or "Clear loop" button in `ScoreView` — the score's
+own start/end/range note highlighting is the only feedback, and clicking any
+other note while looping exits it (`selectLoopNote` in `loopSelection.ts`).
+`clearLoop` still exists on the store (see above) for the cases the score
+itself can't express — stop, restart, seeking off the loop range, loading a
+different song — it's just not bound to a visible button.
