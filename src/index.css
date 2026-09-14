@@ -205,6 +205,7 @@ select {
   height: auto;
   padding-top: 0;
   padding-bottom: 0;
+  background: linear-gradient(90deg, #000 0%, #fff 100%);
   /* `.header-settings` wraps into two internal rows on phone (its own nav
      row, then the content row); centering the short brand icon against that
      whole taller box left it looking anchored to the content row instead of
@@ -375,6 +376,7 @@ select {
   flex-direction: column;
   align-items: stretch;
   justify-content: center;
+  background: transparent;
 }
 
 .header-settings__default > .practice-header {
@@ -972,12 +974,14 @@ select {
   flex: 1 1 auto;
   gap: var(--space-3);
   min-width: 0;
+  color: #252932;
 }
 
 .practice-header__title {
   flex: 0 1 auto;
   min-width: 0;
   max-width: min(28rem, 36%);
+  color: #1b1e25;
   font-size: 1rem;
   font-weight: 650;
   margin: 0;
@@ -1017,6 +1021,7 @@ select {
   min-width: 3.25rem;
   font-variant-numeric: tabular-nums;
   font-size: var(--text-sm);
+  color: #252932;
 }
 
 /* Score / Library surface switch — reuses the segmented `.mode-tabs` look so it
@@ -1097,7 +1102,7 @@ select {
 
 .transport__time {
   font-variant-numeric: tabular-nums;
-  color: var(--text-dim);
+  color: #303640;
   font-size: var(--text-sm);
   white-space: nowrap;
 }
