@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { buildPerformance, midiToNoteName, type NoteEvent, type Performance } from '@/music-model';
-import { parseMidiFile, loadDemoPerformance, MidiImportError } from '@/midi';
+import { parseMidiFile, loadDemoPerformance, listDemoIds, MidiImportError } from '@/midi';
 import {
   PlaybackEngine,
   clearLoopSelection,
@@ -444,6 +444,23 @@ export const useAppStore = create<AppState>((set, get) => ({
     engine.setTempoScale(settings.tempoScale);
     engine.setMetronomeEnabled(settings.metronomeEnabled);
     engine.setCountInEnabled(settings.countInEnabled);
+
+    // One-time, best-effort: drop the built-in demo(s) straight into the
+    // library so a first-time user never has to click an extra "import" step
+    // to get started — it just shows up like any other saved song. Gated on
+    // `demoSeeded` (not "is the library empty") so a user who deletes it later
+    // is not fought with it reappearing on every reload.
+    if (!settings.demoSeeded) {
+      try {
+        for (const id of listDemoIds()) {
+          await persistence.saveSong(loadDemoPerformance(id), true);
+        }
+        await get().refreshSavedSongs();
+        set({ settings: await persistence.saveSettings({ demoSeeded: true }) });
+      } catch {
+        // Leave `demoSeeded` false so a transient failure retries next launch.
+      }
+    }
   },
 
   async importMidiFile(bytes, name) {

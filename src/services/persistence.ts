@@ -40,6 +40,13 @@ export interface SettingsRecord {
    * clock boundary so an on-time performance is scored as on-time. Added in DB v2.
    */
   inputLatencyMs: number;
+  /**
+   * True once the built-in demo(s) have been auto-saved into the library at
+   * least once. Lets the store seed them into `songs` without a "click to
+   * import" step on first run, while still respecting a later deletion — it is
+   * only ever set once, never reset by re-seeding.
+   */
+  demoSeeded: boolean;
 }
 
 interface PianoShadowDB extends DBSchema {
@@ -64,6 +71,7 @@ export const DEFAULT_SETTINGS: SettingsRecord = {
   lastMidiInputId: null,
   showDebugPanel: false,
   inputLatencyMs: 0,
+  demoSeeded: false,
 };
 
 let dbPromise: Promise<IDBPDatabase<PianoShadowDB>> | null = null;

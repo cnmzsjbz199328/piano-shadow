@@ -31,6 +31,7 @@ import { useAppStore, _getEnginesForTests, _getRecognitionForTests } from './use
 import { PerformanceRecorder } from '@/device-adapters';
 import { evaluatePerformance } from '@/practice-engine';
 import { buildPerformance, inferHands } from '@/music-model';
+import * as persistence from '@/services/persistence';
 
 beforeEach(() => {
   _getEnginesForTests().keyboardAdapter.releaseAll();
@@ -320,5 +321,33 @@ describe('useAppStore — practice surface follows the loaded song (UI plan §5.
     await useAppStore.getState().importMidiFile(new Uint8Array([1, 2, 3, 4]).buffer, 'bad');
     expect(useAppStore.getState().importError).toBeTruthy();
     expect(useAppStore.getState().practiceSurface).toBe('score');
+  });
+});
+
+/**
+ * The built-in demo used to require an explicit "load demo" click before it
+ * showed up in the library. That click was redundant — this asserts `init()`
+ * now drops it straight into `savedSongs` on first run, and (crucially) never
+ * fights a later deletion by re-adding it on the next app load.
+ */
+describe('useAppStore — built-in demo auto-seeds without a manual load', () => {
+  beforeEach(async () => {
+    await persistence._resetForTests();
+  });
+
+  it('seeds the demo into the library on first init', async () => {
+    await useAppStore.getState().init();
+    const seeded = useAppStore.getState().savedSongs.find((s) => s.id === 'demo-fur-elise');
+    expect(seeded?.isDemo).toBe(true);
+    expect(useAppStore.getState().settings?.demoSeeded).toBe(true);
+  });
+
+  it('does not re-add the demo on a later init once the user has deleted it', async () => {
+    await useAppStore.getState().init();
+    await useAppStore.getState().deleteSong('demo-fur-elise');
+    expect(useAppStore.getState().savedSongs.some((s) => s.id === 'demo-fur-elise')).toBe(false);
+
+    await useAppStore.getState().init(); // a second app load / page refresh
+    expect(useAppStore.getState().savedSongs.some((s) => s.id === 'demo-fur-elise')).toBe(false);
   });
 });

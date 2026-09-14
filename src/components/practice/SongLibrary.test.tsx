@@ -85,6 +85,12 @@ describe('SongLibrary — library face', () => {
     expect(actions.loadDemo).toHaveBeenCalledWith('demo-fur-elise');
   });
 
+  it('does not repeat the demo button once other songs are saved — the store auto-seeds it into the list instead', () => {
+    state.savedSongs = [record(perf('a', 'Song A'))];
+    render(<SongLibrary />);
+    expect(screen.queryByRole('button', { name: /Für Elise/i })).not.toBeInTheDocument();
+  });
+
   it('marks the current song with an accent row and a "Current" badge', () => {
     const a = perf('a', 'Song A');
     state.savedSongs = [record(a), record(perf('b', 'Song B'))];
