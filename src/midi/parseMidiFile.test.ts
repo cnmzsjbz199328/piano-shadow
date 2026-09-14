@@ -84,9 +84,10 @@ describe('parseMidiFile', () => {
 });
 
 describe('demo assets (spec §22)', () => {
-  it('exposes at least one demo, each parseable via the real importer', () => {
+  it('exposes exactly the Für Elise demo, parseable via the real importer', () => {
     const assets = getDemoAssets();
-    expect(assets.length).toBeGreaterThanOrEqual(1);
+    expect(assets).toHaveLength(1);
+    expect(assets[0]?.id).toBe('demo-fur-elise');
     for (const asset of assets) {
       const perf = loadDemoPerformance(asset.id);
       expect(perf.notes.length).toBeGreaterThan(0);
@@ -94,9 +95,10 @@ describe('demo assets (spec §22)', () => {
     }
   });
 
-  it('includes the spec reference figure C D E F G', () => {
-    const perf = loadDemoPerformance('demo-c-major-pentascale');
-    expect(perf.notes.slice(0, 5).map((n) => n.noteName)).toEqual(['C4', 'D4', 'E4', 'F4', 'G4']);
+  it('contains the supplied piece rather than a generated placeholder melody', () => {
+    const perf = loadDemoPerformance('demo-fur-elise');
+    expect(perf.name).toMatch(/Für Elise/i);
+    expect(perf.notes.length).toBeGreaterThan(100);
   });
 
   it('is deterministic — same bytes every call', () => {

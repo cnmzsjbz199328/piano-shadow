@@ -99,8 +99,11 @@ describe('pipeline: MIDI import -> capture -> alignment -> score', () => {
     expect(last?.actual?.midi).toBe(g4!.midi);
   });
 
-  it('every built-in demo survives the full pipeline with a clean echo', () => {
-    for (const asset of getDemoAssets()) {
+  it('the single built-in Für Elise demo survives the full pipeline with a clean echo', () => {
+    const assets = getDemoAssets();
+    expect(assets).toHaveLength(1);
+    expect(assets[0]?.id).toBe('demo-fur-elise');
+    for (const asset of assets) {
       const reference = loadDemoPerformance(asset.id);
       const learner = recordLearnerPerformance(
         reference.notes.map((n) => ({ midi: n.midi, on: n.startTime, off: n.startTime + n.duration })),

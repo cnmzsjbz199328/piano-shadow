@@ -17,6 +17,7 @@ const { state, actions } = vi.hoisted(() => ({
   },
   actions: {
     loadSavedSong: vi.fn(),
+    loadDemo: vi.fn(),
     setMode: vi.fn(),
     deleteSong: vi.fn(),
   },
@@ -56,6 +57,7 @@ beforeEach(() => {
   state.isLoadingSong = false;
   state.importError = null;
   actions.loadSavedSong.mockReset().mockResolvedValue(undefined);
+  actions.loadDemo.mockReset().mockResolvedValue(undefined);
   actions.setMode.mockReset();
   actions.deleteSong.mockReset().mockResolvedValue(undefined);
 });
@@ -69,10 +71,18 @@ describe('SongLibrary — library face', () => {
     expect(screen.getByRole('button', { name: /import midi/i })).toBeInTheDocument();
   });
 
-  it('empty library keeps the discoverable copy and drop zone, with no built-in demos', () => {
+  it('empty library keeps the discoverable copy and offers the single built-in demo', () => {
     render(<SongLibrary />);
     expect(screen.getByText(/will appear here/i)).toBeInTheDocument();
-    expect(screen.queryByText(/built-in demo/i)).not.toBeInTheDocument();
+    const demos = screen.getByText(/built-in demo/i).parentElement as HTMLElement;
+    expect(within(demos).getAllByRole('button')).toHaveLength(1);
+    expect(within(demos).getByRole('button', { name: /Für Elise/i })).toBeInTheDocument();
+  });
+
+  it('loading the demo goes through the store action', async () => {
+    render(<SongLibrary />);
+    await userEvent.click(screen.getByRole('button', { name: /Für Elise/i }));
+    expect(actions.loadDemo).toHaveBeenCalledWith('demo-fur-elise');
   });
 
   it('marks the current song with an accent row and a "Current" badge', () => {

@@ -311,7 +311,7 @@ describe('useAppStore — practice surface follows the loaded song (UI plan §5.
 
   it('loading a built-in demo flips to the score face', async () => {
     useAppStore.setState({ practiceSurface: 'library' });
-    await useAppStore.getState().loadDemo('demo-twinkle');
+    await useAppStore.getState().loadDemo('demo-fur-elise');
     expect(useAppStore.getState().practiceSurface).toBe('score');
   });
 
