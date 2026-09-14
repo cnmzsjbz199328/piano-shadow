@@ -97,8 +97,6 @@ export function HeaderSettings({ defaultContent = null }: HeaderSettingsProps) {
   const setCountInEnabled = useAppStore((s) => s.setCountInEnabled);
   const isAttemptRunning = useAppStore((s) => s.isAttemptRunning);
   const recognitionActive = useAppStore((s) => s.recognitionState === 'initializing' || s.recognitionState === 'listening');
-  const showDebugPanel = useAppStore((s) => s.showDebugPanel);
-  const setShowDebugPanel = useAppStore((s) => s.setShowDebugPanel);
 
   const currentPage = openCategory ? Math.min(pages[openCategory] ?? 0, pageCount(openCategory, phone) - 1) : 0;
   const settingsDisabled = !song;
@@ -355,7 +353,6 @@ export function HeaderSettings({ defaultContent = null }: HeaderSettingsProps) {
     const actions = [
       <button key="advanced" type="button" className="header-settings__option" onClick={() => navigate('/experiments')}>Advanced</button>,
       <button key="diagnostics" type="button" className="header-settings__option" onClick={() => navigate('/lab')}>Diagnostics</button>,
-      <button key="debug" type="button" className="header-settings__option" aria-pressed={showDebugPanel} onClick={() => setShowDebugPanel(!showDebugPanel)}>Debug mode: {showDebugPanel ? 'On' : 'Off'}</button>,
     ];
     return <div className="header-settings__page">{phone ? actions[currentPage] : actions}</div>;
   }

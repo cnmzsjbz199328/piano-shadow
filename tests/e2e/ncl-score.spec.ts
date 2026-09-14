@@ -45,10 +45,10 @@ test('NCL staff rendering keeps flags and voices separated', async ({ page }) =>
 
   const first = score.locator('.score-note').first();
   await first.click();
-  await expect(score.getByRole('status')).toContainText('10 秒');
+  await expect(score.getByRole('status')).toHaveCount(0);
   await page.screenshot({ path: 'doc/screenshots/ncl-score-waiting.png', fullPage: false });
   await score.locator('.score-note').nth(1).click();
-  await expect(score.getByRole('status')).toContainText('循环中');
+  await expect(score.getByRole('status')).toHaveCount(0);
   await expect(score.locator('.score-note--loop-start')).toHaveCount(1);
   await expect(score.locator('.score-note--loop-end')).toHaveCount(1);
   await expect(score.locator('.score-loop-marker')).toHaveCount(2);

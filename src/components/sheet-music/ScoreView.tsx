@@ -743,8 +743,6 @@ export function ScoreView() {
   );
   const loopSelection = useAppStore((s) => (s as { loopSelection?: LoopSelectionState }).loopSelection ?? initialLoopSelection());
   const selectLoopNoteAction = useAppStore((s) => (s as { selectLoopNote?: (note: LoopNoteRef) => void }).selectLoopNote);
-  const clearLoopAction = useAppStore((s) => (s as { clearLoop?: () => void }).clearLoop);
-  const loopNotice = useAppStore((s) => (s as { loopNotice?: string | null }).loopNotice ?? null);
   const hostRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
   const [renderFailed, setRenderFailed] = useState(false);
@@ -901,12 +899,6 @@ export function ScoreView() {
     );
   }
 
-  const loopStatus = loopSelection.status === 'awaiting-second'
-    ? '已选起点，请在 10 秒内选择另一音符。'
-    : loopSelection.status === 'looping'
-      ? `循环中：${loopSelection.range.startTime.toFixed(2)}s – ${loopSelection.range.endTime.toFixed(2)}s`
-      : loopNotice;
-
   return (
     <div className="score-view">
       {renderFailed && (
@@ -917,14 +909,6 @@ export function ScoreView() {
       )}
       {!renderFailed && !model && (
         <p className="score-view__note">This song has no notes to display.</p>
-      )}
-      {loopStatus && (
-        <div className="score-loop-status" role="status" aria-live="polite">
-          <span>{loopStatus}</span>
-          {loopSelection.status === 'looping' && clearLoopAction && (
-            <button type="button" className="btn btn--quiet btn--sm" onClick={clearLoopAction}>Clear loop</button>
-          )}
-        </div>
       )}
       <div
         ref={hostRef}

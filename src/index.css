@@ -142,7 +142,7 @@ select {
 .app-nav {
   position: relative;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--space-4);
   height: var(--nav-h);
@@ -151,21 +151,6 @@ select {
   border-bottom: 1px solid var(--border);
   background: var(--bg-elevated);
   z-index: 20;
-}
-
-.app-nav__brand {
-  justify-self: start;
-  font-weight: 700;
-  font-size: var(--text-lg);
-  color: var(--text);
-  text-decoration: none;
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
-}
-
-.app-nav__brand-mark {
-  color: var(--text-dim);
 }
 
 .app-nav__links {
@@ -216,7 +201,7 @@ select {
    classes for specificity: this must win over every width-specific `.app-nav`
    rule below regardless of source order. */
 .app-nav.app-nav--practice {
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   height: auto;
   padding-top: 0;
   padding-bottom: 0;
@@ -386,7 +371,13 @@ select {
 .header-settings__status { overflow: hidden; color: var(--text-dim); font-size: var(--text-xs); text-overflow: ellipsis; white-space: nowrap; }
 .midi-device--compact > p { display: none; }
 
-.header-settings__default > .song-transport {
+.header-settings__default {
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+}
+
+.header-settings__default > .practice-header {
   width: 100%;
   min-width: 0;
 }
@@ -903,6 +894,12 @@ select {
   font-size: var(--text-sm);
 }
 .library-empty p { margin: 0; }
+.library-empty__demos {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.library-empty__demos > span { color: var(--text-dim); }
 .song-list { display: flex; flex-direction: column; gap: 0.45rem; }
 .song-row {
   display: flex;
@@ -957,21 +954,30 @@ select {
 .practice-live-feedback .live-feedback { display: flex; gap: var(--space-3); max-height: 1.7rem; overflow: hidden; }
 .practice-live-feedback .live-feedback__item { min-width: 0; flex: 0 1 auto; }
 
-/* Single-line transport: title, seek, time, play/speed, surface switch. */
+/* Practice header: the right side of the app header is split into track
+   context (title, seek, time) and actions (playback, speed, surface). */
 .practice-header {
   display: flex;
   align-items: center;
-  gap: var(--space-4);
+  gap: var(--space-5);
   flex-wrap: nowrap;
+  width: 100%;
+  min-width: 0;
   font-size: var(--text-sm);
 }
 
-.practice-header__id {
-  flex: 0 1 clamp(14rem, 28vw, 27rem);
-  min-width: 8rem;
+.practice-header__context {
+  display: flex;
+  align-items: center;
+  flex: 1 1 auto;
+  gap: var(--space-3);
+  min-width: 0;
 }
 
 .practice-header__title {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: min(28rem, 36%);
   font-size: 1rem;
   font-weight: 650;
   margin: 0;
@@ -991,6 +997,15 @@ select {
   accent-color: var(--accent);
 }
 
+.practice-header__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  flex-shrink: 0;
+  padding-left: var(--space-4);
+  border-left: 1px solid var(--border-subtle);
+}
+
 .practice-header__transport {
   display: flex;
   align-items: center;
@@ -1005,13 +1020,9 @@ select {
 }
 
 /* Score / Library surface switch — reuses the segmented `.mode-tabs` look so it
-   reads as a peer of the practice-mode control, not a new visual language.
-   Pinned to the row's right edge unconditionally: without `margin-left: auto`
-   its position depended on whether `.practice-header__seek` (a flex-grow
-   item) was in the DOM, so loading/clearing a song shifted it left/right. */
+   reads as a peer of the practice-mode control, not a new visual language. */
 .surface-switch {
   flex-shrink: 0;
-  margin-left: auto;
 }
 
 /* segmented mode control */
@@ -1872,7 +1883,6 @@ select {
   }
 
   .app-nav__settings:empty { display: none; }
-  .app-nav__brand { min-width: 2rem; }
   .app-nav__settings { grid-column: 1 / -1; grid-row: 2; height: 0; }
 
   .header-settings__category { padding: 0 0.6rem; }
@@ -1919,21 +1929,35 @@ select {
     flex-wrap: wrap;
   }
 
-  .practice-header__id {
-    flex: 1 1 calc(100% - 12rem);
+  .practice-header__context {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "title time"
+      "seek seek";
+    flex: 1 1 100%;
+    gap: var(--space-2) var(--space-3);
+  }
+
+  .practice-header__title {
+    grid-area: title;
+    max-width: none;
   }
 
   .practice-header__seek {
-    order: 3;
-    flex-basis: calc(100% - 4rem);
+    grid-area: seek;
+    min-width: 0;
   }
 
-  .practice-header > .transport__time {
-    order: 4;
+  .practice-header__context > .transport__time {
+    grid-area: time;
   }
 
-  .practice-header__transport {
-    order: 2;
+  .practice-header__actions {
+    width: 100%;
+    justify-content: space-between;
+    padding-left: 0;
+    border-left: 0;
   }
 
   .song-row { align-items: flex-start; flex-direction: column; }
@@ -1951,7 +1975,7 @@ select {
   }
 
   .surface-switch {
-    order: 5;
+    margin-left: auto;
   }
 }
 
@@ -1964,7 +1988,6 @@ select {
     padding: 0 var(--space-2);
   }
 
-  .app-nav__brand { padding: 0 0.35rem; }
   .header-settings__content { gap: 0.25rem; }
   .header-settings__title { margin-right: 0.25rem; }
   .header-settings__body { overflow: hidden; }
@@ -2259,18 +2282,4 @@ select {
   font-size: 13px;
   font-weight: 700;
   pointer-events: none;
-}
-
-.score-loop-status {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-  margin-bottom: var(--space-2);
-  padding: 0.45rem 0.65rem;
-  border: 1px solid color-mix(in srgb, var(--accent) 55%, var(--border));
-  border-radius: var(--radius-sm);
-  background: color-mix(in srgb, var(--accent) 10%, var(--bg-elevated));
-  color: var(--text);
-  font-size: var(--text-sm);
 }

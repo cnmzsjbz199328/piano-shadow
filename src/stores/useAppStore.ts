@@ -117,7 +117,6 @@ interface AppState {
    *  BEFORE the engine / `evaluatePerformance` see it — they stay pure. */
   practiceVoice: PracticeVoice;
   loopSelection: LoopSelectionState;
-  loopNotice: string | null;
 
   // actions
   init(): Promise<void>;
@@ -220,7 +219,7 @@ function clearLoopSelectionTimer(): void {
 function clearLoopState(): void {
   clearLoopSelectionTimer();
   engine.clearLoopRange();
-  useAppStore.setState((s) => ({ loopSelection: clearLoopSelection(s.loopSelection), loopNotice: null }));
+  useAppStore.setState((s) => ({ loopSelection: clearLoopSelection(s.loopSelection) }));
 }
 
 /**
@@ -420,7 +419,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   soundEnabled: true,
   practiceVoice: 'both',
   loopSelection: initialLoopSelection(),
-  loopNotice: null,
 
   recognitionState: 'idle',
   recognitionSource: null,
@@ -533,7 +531,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     const next = selectLoopNote(get().loopSelection, note, now);
     if (next === get().loopSelection) return;
     clearLoopSelectionTimer();
-    set({ loopSelection: next, loopNotice: null });
+    set({ loopSelection: next });
     if (next.status === 'idle') {
       engine.clearLoopRange();
       return;
@@ -544,7 +542,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         const current = get().loopSelection;
         if (current.status !== 'awaiting-second' || current.version !== version) return;
         const expired = expireLoopSelection(current, performance.now());
-        if (expired !== current) set({ loopSelection: expired, loopNotice: 'The loop selection timed out.' });
+        if (expired !== current) set({ loopSelection: expired });
         loopSelectionTimer = null;
       }, LOOP_SELECTION_TIMEOUT_MS + 1);
       return;
@@ -552,7 +550,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (next.status === 'looping') {
       if (!engine.setLoopRange(next.range) || !engine.startLoop()) {
         engine.clearLoopRange();
-        set({ loopSelection: clearLoopSelection(next), loopNotice: 'This note range cannot be looped.' });
+        set({ loopSelection: clearLoopSelection(next) });
       }
     }
   },
@@ -576,19 +574,19 @@ export const useAppStore = create<AppState>((set, get) => ({
   stop() {
     engine.stop();
     clearLoopSelectionTimer();
-    set({ waitingForMidi: null, liveFeedback: [], lastInputFeedback: null, loopSelection: clearLoopSelection(get().loopSelection), loopNotice: null });
+    set({ waitingForMidi: null, liveFeedback: [], lastInputFeedback: null, loopSelection: clearLoopSelection(get().loopSelection) });
   },
   restart() {
     if (!canStartPlayback()) return;
     engine.restart();
     clearLoopSelectionTimer();
-    set({ waitingForMidi: null, liveFeedback: [], lastInputFeedback: null, loopSelection: clearLoopSelection(get().loopSelection), loopNotice: null });
+    set({ waitingForMidi: null, liveFeedback: [], lastInputFeedback: null, loopSelection: clearLoopSelection(get().loopSelection) });
   },
   seek(seconds) {
     engine.seek(seconds);
     const loop = engine.getLoopRange();
     if (!loop && get().loopSelection.status === 'looping') clearLoopSelectionTimer();
-    set({ currentTime: engine.getCurrentTime(), waitingForMidi: null, liveFeedback: [], lastInputFeedback: null, ...(loop ? {} : { loopSelection: clearLoopSelection(get().loopSelection), loopNotice: null }) });
+    set({ currentTime: engine.getCurrentTime(), waitingForMidi: null, liveFeedback: [], lastInputFeedback: null, ...(loop ? {} : { loopSelection: clearLoopSelection(get().loopSelection) }) });
   },
 
   setTempoScale(scale) {
@@ -818,7 +816,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     engine.stop();
     clearLoopSelectionTimer();
     // No song left to notate — fall back to the library face (UI_OPTIMIZATION_PLAN.md §5.1).
-    set({ song: null, songRecord: null, duration: 0, currentTime: 0, lastResult: null, lastLearnerPerformance: null, attemptHistory: [], mode: 'listen', practiceSurface: 'library', waitingForMidi: null, liveFeedback: [], lastInputFeedback: null, loopSelection: clearLoopSelection(get().loopSelection), loopNotice: null });
+    set({ song: null, songRecord: null, duration: 0, currentTime: 0, lastResult: null, lastLearnerPerformance: null, attemptHistory: [], mode: 'listen', practiceSurface: 'library', waitingForMidi: null, liveFeedback: [], lastInputFeedback: null, loopSelection: clearLoopSelection(get().loopSelection) });
   },
 }));
 

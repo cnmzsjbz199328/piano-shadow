@@ -1,18 +1,15 @@
 import { useEffect } from 'react';
-import { NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
+import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { useAppStore } from '@/stores/useAppStore';
-import { DebugPanel } from '@/components/debug/DebugPanel';
 import { OverflowMenu } from '@/components/common/OverflowMenu';
 import { PracticePage } from '@/pages/PracticePage';
 import { ResultsPage } from '@/pages/ResultsPage';
 import { ExperimentsPage } from '@/pages/ExperimentsPage';
 import { MicrophoneLabPage } from '@/pages/MicrophoneLabPage';
 
-/** The product surface is one page. Diagnostics remain available from Settings. */
+/** The product surface is one page. */
 export default function App() {
   const init = useAppStore((s) => s.init);
-  const showDebugPanel = useAppStore((s) => s.showDebugPanel);
-  const setShowDebugPanel = useAppStore((s) => s.setShowDebugPanel);
   const location = useLocation();
   const navigate = useNavigate();
   const isPracticeRoute = location.pathname === '/' || location.pathname === '/practice';
@@ -22,9 +19,6 @@ export default function App() {
   return (
     <div className="app-shell">
       <nav className={`app-nav${isPracticeRoute ? ' app-nav--practice' : ''}`}>
-        <NavLink to="/" className="app-nav__brand" aria-label="Piano Shadow">
-          <span className="app-nav__brand-mark" aria-hidden>♬</span>
-        </NavLink>
         {isPracticeRoute && <div className="app-nav__header-settings-slot" id="header-settings-slot" />}
         {!isPracticeRoute && <div className="app-nav__settings" />}
         {!isPracticeRoute && <div className="app-nav__actions">
@@ -37,9 +31,6 @@ export default function App() {
               Recognition diagnostics
             </button>
             <div className="overflow-menu__sep" />
-            <button type="button" role="menuitemcheckbox" aria-checked={showDebugPanel} className="overflow-menu__item" onClick={() => setShowDebugPanel(!showDebugPanel)}>
-              Debug panel <span aria-hidden>{showDebugPanel ? 'On' : 'Off'}</span>
-            </button>
           </OverflowMenu>
         </div>}
       </nav>
@@ -54,7 +45,6 @@ export default function App() {
           <Route path="/experiments" element={<ExperimentsPage />} />
         </Routes>
       </main>
-      {showDebugPanel && <DebugPanel />}
     </div>
   );
 }
