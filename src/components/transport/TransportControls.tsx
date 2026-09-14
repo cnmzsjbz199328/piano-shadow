@@ -1,4 +1,5 @@
 import { useAppStore, type PracticeSurface } from '@/stores/useAppStore';
+import { PauseIcon, PlayIcon } from '@/components/common/icons';
 
 function formatTime(seconds: number): string {
   const clamped = Math.max(0, seconds);
@@ -64,8 +65,13 @@ export function TransportControls({ surface, onSurfaceChange, surfaceSwitchDisab
 
         <div className="practice-header__actions">
           <div className="practice-header__transport">
-            <button type="button" className="btn btn--primary" disabled={disabled || recognitionActive} onClick={() => (playing ? pause() : void play())}>
-              <span aria-hidden>{playing ? '\u23f8' : '\u25b6'}</span> {playing ? 'Pause' : 'Play'}
+            <button
+              type="button"
+              className="btn btn--primary transport-play-btn"
+              disabled={disabled || recognitionActive}
+              onClick={() => (playing ? pause() : void play())}
+            >
+              {playing ? <PauseIcon /> : <PlayIcon />} {playing ? 'Pause' : 'Play'}
             </button>
             <button
               type="button"
